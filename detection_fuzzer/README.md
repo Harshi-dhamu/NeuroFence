@@ -13,3 +13,17 @@ This module is responsible for:
   - FileNotFoundError
   - JSONDecodeError
 - Successfully tested the prompt loader.
+## Day 3 Progress
+
+- Added Prompt Manager
+- Implemented prompt filtering
+- Added category support
+- Added random prompt selection
+- Expanded prompt dataset
+## Day 4 Progress
+
+- Added Fuzz Engine
+- Added Prompt Generator
+- Implemented batch generation
+- Added sequential prompt retrieval
+- Prepared the module for future scan integration
