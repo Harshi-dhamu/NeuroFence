@@ -1,33 +1,56 @@
 """
 hooks.py
 
-Forward hook management.
-
-Actual hook implementation
-will be added in Day 2.
+Forward hook management for capturing intermediate activations.
 """
+
+from typing import Dict, Any
+import torch
 
 
 class HookManager:
     """
-    Placeholder for hook registration.
+    Registers forward hooks on model layers and stores activations.
     """
 
     def __init__(self):
         self.handles = []
+        self.activations: Dict[str, Any] = {}
+
+    def _hook_fn(self, layer_name):
+        """
+        Returns a hook function for a specific layer.
+        """
+
+        def hook(module, inputs, output):
+            if isinstance(output, torch.Tensor):
+                self.activations[layer_name] = output.detach().cpu()
+
+        return hook
 
     def register_hooks(self, model):
         """
-        Register forward hooks.
-
-        To be implemented.
+        Register forward hooks on supported layers.
         """
-        raise NotImplementedError("Hook registration not implemented yet.")
+
+        self.activations.clear()
+
+        for name, module in model.named_modules():
+            # Skip the top-level model itself
+            if name == "":
+                continue
+
+            handle = module.register_forward_hook(
+                self._hook_fn(name)
+            )
+            self.handles.append(handle)
 
     def remove_hooks(self):
         """
-        Remove all hooks.
-
-        To be implemented.
+        Remove every registered hook.
         """
-        raise NotImplementedError("Hook removal not implemented yet.")
+
+        for handle in self.handles:
+            handle.remove()
+
+        self.handles.clear()

@@ -1,54 +1,37 @@
 """
 tracker.py
 
-Defines the public ActivationTracker interface.
-
-Future versions will:
-- Register forward hooks
-- Capture activations
-- Remove hooks safely
-- Return collected activations
+Main Activation Tracker interface.
 """
 
 from typing import Any, Dict
 
+from .hooks import HookManager
+
 
 class ActivationTracker:
     """
-    High-level interface for activation tracking.
-
-    Parameters
-    ----------
-    model:
-        Loaded neural network model.
+    Tracks intermediate neural network activations.
     """
 
     def __init__(self, model: Any):
         self.model = model
-        self.activations: Dict[str, Any] = {}
+        self.hook_manager = HookManager()
 
     def start_tracking(self):
         """
-        Start activation tracking.
-
-        Actual hook registration will be implemented later.
+        Register forward hooks.
         """
-        print("Activation tracking initialized.")
+        self.hook_manager.register_hooks(self.model)
 
     def stop_tracking(self):
         """
-        Stop activation tracking.
-
-        Hook removal will be added later.
+        Remove hooks.
         """
-        print("Activation tracking stopped.")
+        self.hook_manager.remove_hooks()
 
     def get_activations(self) -> Dict[str, Any]:
         """
-        Return collected activations.
-
-        Returns
-        -------
-        Dict[str, Any]
+        Return captured activations.
         """
-        return self.activations
+        return self.hook_manager.activations
