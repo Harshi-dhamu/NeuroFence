@@ -7,6 +7,9 @@ from PyQt6.QtWidgets import (
     QGridLayout,
 )
 
+from desktop_ui.widgets.progress_card import ProgressCard
+from desktop_ui.widgets.activity_widget import ActivityWidget
+
 from PyQt6.QtCore import Qt
 
 from desktop_ui.widgets.sidebar import Sidebar
@@ -141,6 +144,20 @@ class MainWindow(QMainWindow):
 
         right_layout.addLayout(middle_layout)
         
+        bottom_layout = QHBoxLayout()
+
+        bottom_layout.setSpacing(20)
+
+        self.activity = ActivityWidget()
+
+        self.progress_card = ProgressCard()
+
+        bottom_layout.addWidget(self.activity)
+
+        bottom_layout.addWidget(self.progress_card)
+
+        right_layout.addLayout(bottom_layout)
+        
         ###################################################
         # Live Logs
         ###################################################
@@ -159,7 +176,7 @@ class MainWindow(QMainWindow):
         # Status Bar
         ###################################################
 
-        self.statusBar().showMessage("Ready")
+        self.statusBar().showMessage("✔ Ready | NeuroFence Desktop v1.0 | AI Security")
 
         ###################################################
         # Menu Bar
@@ -189,43 +206,43 @@ class MainWindow(QMainWindow):
 
     def start_scan(self):
 
-        self.logs_widget.add_log("")
+        self.progress_card.progress.setValue(0)
 
-        self.logs_widget.add_log("=" * 45)
+        self.activity.add_activity("Security scan started")
 
-        self.logs_widget.add_log("Starting NeuroFence Scan...")
+        self.logs_widget.add_log("Starting scan...")
 
-        if self.upload_card.model_path:
+        self.progress_card.progress.setValue(20)
 
-            self.logs_widget.add_log(
-                f"Model Loaded: {self.upload_card.model_path}"
-            )
+        self.activity.add_activity("Checking model")
 
-        else:
+        self.logs_widget.add_log("Checking model...")
 
-            self.logs_widget.add_log(
-                "No model selected. Running demo scan..."
-            )
+        self.progress_card.progress.setValue(40)
 
-        self.logs_widget.add_log("Checking model structure...")
+        self.activity.add_activity("Analyzing weights")
 
-        self.logs_widget.add_log("Analyzing model weights...")
+        self.logs_widget.add_log("Analyzing weights...")
 
-        self.logs_widget.add_log("Searching for dormant neurons...")
+        self.progress_card.progress.setValue(60)
 
-        self.logs_widget.add_log("Running adversarial prompts...")
+        self.activity.add_activity("Searching hidden neurons")
 
-        self.logs_widget.add_log("Checking activation patterns...")
+        self.logs_widget.add_log("Searching dormant neurons...")
 
-        self.logs_widget.add_log("")
+        self.progress_card.progress.setValue(80)
 
-        self.logs_widget.add_log(
-            "✓ Demo completed successfully."
-        )
+        self.activity.add_activity("Running adversarial prompts")
 
-        self.logs_widget.add_log("=" * 45)
+        self.logs_widget.add_log("Running prompts...")
 
-        self.statusBar().showMessage("Demo Scan Finished")
+        self.progress_card.progress.setValue(100)
+
+        self.activity.add_activity("Scan completed")
+
+        self.logs_widget.add_log("Scan Complete")
+
+        self.statusBar().showMessage("Scan Finished")
 
         self.scan_card.status.setText("Status : Scan Complete")
 
