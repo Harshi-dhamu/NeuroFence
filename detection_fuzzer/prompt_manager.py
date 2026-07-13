@@ -34,13 +34,35 @@ def get_prompts_by_category(category):
     prompts = load_prompts()
     if prompts:
         return [p for p in prompts if p.get("category") == category]
-    return []
+        return []
+def get_high_risk():
+        prompts = get_all_prompts()
+        return prompts.get("high_risk", [])
 
+
+def get_medium_risk():
+    prompts = get_all_prompts()
+    return prompts.get("medium_risk", [])
+
+
+def get_low_risk():
+    prompts = get_all_prompts()
+    return prompts.get("low_risk", [])
 
 if __name__ == "__main__":
     print("Total Prompts:", get_prompt_count())
     print("\nRandom Prompt:")
     print(get_random_prompt())
+    print("\nHigh Risk Prompts:")
+    print(get_high_risk())
 
+    print("\nMedium Risk Prompts:")
+    print(get_medium_risk())
+
+    print("\nLow Risk Prompts:")
+    print(get_low_risk())
+    
     # print("\nJailbreak Prompts:")
     # print(get_prompts_by_category("jailbreak"))
+
+    
