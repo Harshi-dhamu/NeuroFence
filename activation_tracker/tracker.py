@@ -19,19 +19,13 @@ class ActivationTracker:
         self.hook_manager = HookManager()
 
     def start_tracking(self):
-        """
-        Register forward hooks.
-        """
+        """Register hooks."""
         self.hook_manager.register_hooks(self.model)
 
     def stop_tracking(self):
-        """
-        Remove hooks.
-        """
+        """Remove hooks."""
         self.hook_manager.remove_hooks()
 
     def get_activations(self) -> Dict[str, Any]:
-        """
-        Return captured activations.
-        """
+        """Return captured activations."""
         return self.hook_manager.activations

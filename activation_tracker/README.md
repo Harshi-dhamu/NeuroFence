@@ -36,17 +36,18 @@ activation_tracker/
 
 ## Current Status
 
-Implemented:
+Implemented
 
-* Package structure
-* ActivationTracker interface
-* Placeholder HookManager
-* Placeholder Analyzer
-* Utility helper functions
+- Package structure
+- ActivationTracker interface
+- Forward hook registration
+- Selective layer tracking
+- Activation metadata collection
+- Safe hook cleanup
 
-Upcoming:
+Upcoming
 
-* Forward hook registration
-* Activation collection
-* Layer filtering
-* Statistical analysis
+- Activation statistics
+- Analyzer integration
+- Export utilities
+
