@@ -1,20 +1,41 @@
 """
-utils.py
-
-Shared helper utilities.
+Utility functions for activation processing.
 """
 
+from typing import Any, Dict, Optional
 
-def module_name(module):
+import torch
+
+
+def extract_tensor(output) -> Optional[torch.Tensor]:
     """
-    Return module class name.
-
-    Parameters
-    ----------
-    module
-
-    Returns
-    -------
-    str
+    Extract the first tensor from a layer output.
     """
-    return module.__class__.__name__
+
+    if isinstance(output, torch.Tensor):
+        return output.detach().cpu()
+
+    if isinstance(output, (tuple, list)):
+        for item in output:
+            if isinstance(item, torch.Tensor):
+                return item.detach().cpu()
+
+    return None
+
+
+def create_activation_record(
+    layer_name: str,
+    module,
+    activation: torch.Tensor,
+) -> Dict[str, Any]:
+    """
+    Create a standardized activation record.
+    """
+
+    return {
+        "layer_name": layer_name,
+        "layer_type": module.__class__.__name__,
+        "shape": tuple(activation.shape),
+        "dtype": str(activation.dtype),
+        "activation": activation,
+    }

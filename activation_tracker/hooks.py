@@ -1,77 +1,60 @@
 """
-hooks.py
-
-Forward hook management for capturing intermediate activations.
+Forward hook management.
 """
 
-from typing import Dict, Any
+from typing import Any, Dict
 
-import torch
-import torch.nn as nn
+from .utils import (
+    extract_tensor,
+    create_activation_record,
+)
 
 
 class HookManager:
     """
-    Registers forward hooks on selected neural network layers.
+    Manages forward hooks for activation tracking.
     """
-
-    SUPPORTED_LAYERS = (
-        nn.Linear,
-        nn.Conv1d,
-        nn.Conv2d,
-        nn.Conv3d,
-        nn.ReLU,
-        nn.GELU,
-        nn.Sigmoid,
-        nn.Tanh,
-        nn.BatchNorm1d,
-        nn.BatchNorm2d,
-        nn.LayerNorm,
-    )
 
     def __init__(self):
         self.handles = []
         self.activations: Dict[str, Dict[str, Any]] = {}
 
-    def _hook_fn(self, layer_name: str):
+    def _hook_fn(self, layer_name):
         """
-        Create a hook function for a specific layer.
+        Forward hook callback.
         """
 
         def hook(module, inputs, output):
-            if not isinstance(output, torch.Tensor):
+
+            activation = extract_tensor(output)
+
+            if activation is None:
                 return
 
-            self.activations[layer_name] = {
-                "layer_type": module.__class__.__name__,
-                "shape": tuple(output.shape),
-                "dtype": str(output.dtype),
-                "activation": output.detach().cpu(),
-            }
+            self.activations[layer_name] = create_activation_record(
+                layer_name=layer_name,
+                module=module,
+                activation=activation,
+            )
 
         return hook
 
     def register_hooks(self, model):
-        """
-        Register hooks only on supported layer types.
-        """
 
         self.activations.clear()
 
         for name, module in model.named_modules():
+
             if name == "":
                 continue
 
-            if isinstance(module, self.SUPPORTED_LAYERS):
-                handle = module.register_forward_hook(
-                    self._hook_fn(name)
-                )
-                self.handles.append(handle)
+            handle = module.register_forward_hook(
+                self._hook_fn(name)
+            )
+
+            self.handles.append(handle)
 
     def remove_hooks(self):
-        """
-        Remove all registered hooks.
-        """
 
         for handle in self.handles:
             handle.remove()
