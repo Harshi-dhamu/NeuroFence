@@ -1,11 +1,10 @@
-"""Main application window for the NeuroFence desktop UI.
-
-This module is intentionally compatible with the existing widgets in the
-project ZIP.  It adds a scrollable, responsive dashboard and performs the demo
-scan asynchronously so the interface remains responsive.
-"""
+"""Responsive Day 6 dashboard controller for the NeuroFence desktop UI."""
 
 from __future__ import annotations
+
+from datetime import datetime
+from pathlib import Path
+from time import perf_counter
 
 from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtWidgets import (
@@ -13,8 +12,8 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
-    QPushButton,
     QMessageBox,
+    QPushButton,
     QScrollArea,
     QSizePolicy,
     QSplitter,
@@ -23,7 +22,9 @@ from PyQt6.QtWidgets import (
 )
 
 from desktop_ui.components.circular_gauge import CircularGauge
+from desktop_ui.components.recent_scan_panel import RecentScanPanel
 from desktop_ui.components.system_info import SystemInfo
+from desktop_ui.components.system_status_card import SystemStatusCard
 from desktop_ui.components.top_bar import TopBar
 from desktop_ui.widgets.activity_widget import ActivityWidget
 from desktop_ui.widgets.info_card import InfoCard
@@ -35,34 +36,32 @@ from desktop_ui.widgets.upload_card import UploadCard
 
 
 class MainWindow(QMainWindow):
-    """Responsive main window for the NeuroFence security dashboard."""
+    """Main responsive dashboard and future backend integration boundary."""
 
-    COMPACT_WIDTH = 1050
+    COMPACT_WIDTH = 1100
 
     def __init__(self) -> None:
         super().__init__()
-
-        self.setWindowTitle("NeuroFence Enterprise AI Security Platform")
-        self.resize(1500, 900)
-        self.setMinimumSize(820, 600)
+        self.setWindowTitle("NeuroFence | LLM Weight Poisoning & Backdoor Scanner")
+        self.resize(1500, 920)
+        self.setMinimumSize(820, 620)
 
         self._compact_mode: bool | None = None
         self._scan_step_index = 0
-        self._scan_steps: list[tuple[int, int, str, str]] = []
+        self._scan_started_at = 0.0
+        self._scan_steps: list[dict[str, object]] = []
+        self.last_threat_score = 0
+        self.last_scan_result = "READY"
 
         self.scan_timer = QTimer(self)
-        self.scan_timer.setInterval(550)
+        self.scan_timer.setInterval(650)
         self.scan_timer.timeout.connect(self._run_next_scan_step)
 
         self.setup_ui()
         self.setup_menu()
         self.connect_signals()
-
-        self.statusBar().showMessage(
-            "✔ Ready | NeuroFence Enterprise v1.0 | AI Security Platform"
-        )
-
-        # Apply the correct layout after Qt has completed the first geometry pass.
+        self.update_dashboard("Protected")
+        self.statusBar().showMessage("Ready | NeuroFence scanner protected")
         QTimer.singleShot(0, self._update_responsive_layout)
 
     # ------------------------------------------------------------------
@@ -79,22 +78,15 @@ class MainWindow(QMainWindow):
         root_layout.setSpacing(0)
 
         self.sidebar = Sidebar()
-        self.sidebar.setSizePolicy(
-            QSizePolicy.Policy.Fixed,
-            QSizePolicy.Policy.Expanding,
-        )
+        self.sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self._ensure_sidebar_help_action()
         root_layout.addWidget(self.sidebar)
 
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
-        self.scroll_area.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
-        )
-        self.scroll_area.setVerticalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAsNeeded
-        )
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         root_layout.addWidget(self.scroll_area, 1)
 
         self.dashboard_widget = QWidget()
@@ -106,23 +98,18 @@ class MainWindow(QMainWindow):
         self.dashboard_layout.setSpacing(26)
 
         self.top_bar = TopBar()
-        self.top_bar.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Fixed,
-        )
+        self.top_bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.dashboard_layout.addWidget(self.top_bar)
 
         self._build_statistics_section()
         self._build_action_section()
         self._build_analysis_section()
+        self._build_day6_overview_section()
         self._build_activity_section()
 
         self.logs_widget = LogsWidget()
-        self.logs_widget.setMinimumHeight(180)
-        self.logs_widget.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Expanding,
-        )
+        self.logs_widget.setMinimumHeight(230)
+        self.logs_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.dashboard_layout.addWidget(self.logs_widget, 1)
 
     def _build_statistics_section(self) -> None:
@@ -132,105 +119,89 @@ class MainWindow(QMainWindow):
         self.stats_layout.setHorizontalSpacing(24)
         self.stats_layout.setVerticalSpacing(24)
 
-        self.card_models = InfoCard("Models Loaded", "0")
-        self.card_threat = InfoCard("Threat Score", "0%")
-        self.card_status = InfoCard("System Status", "Ready")
-        self.stat_cards = [
-            self.card_models,
-            self.card_threat,
-            self.card_status,
-        ]
+        self.card_models = InfoCard("Models Loaded", "0", "Models prepared for inspection")
+        self.card_threat = InfoCard("Threat Score", "0%", "Current model risk level")
+        self.card_status = InfoCard("System Status", "Protected", "Scanner protection state")
+        self.stat_cards = [self.card_models, self.card_threat, self.card_status]
 
         for card in self.stat_cards:
             card.setObjectName("card")
             card.setMinimumHeight(115)
-            card.setSizePolicy(
-                QSizePolicy.Policy.Expanding,
-                QSizePolicy.Policy.Preferred,
-            )
+            card.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
         self.dashboard_layout.addWidget(self.stats_container)
 
     def _build_action_section(self) -> None:
-        self.action_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.action_splitter.setChildrenCollapsible(False)
-        self.action_splitter.setHandleWidth(8)
-
+        self.action_splitter = self._new_splitter()
         self.upload_card = UploadCard()
         self.scan_card = ScanCard()
-
         self.upload_card.setMinimumHeight(210)
         self.scan_card.setMinimumHeight(210)
-
         self.action_splitter.addWidget(self.upload_card)
         self.action_splitter.addWidget(self.scan_card)
         self.action_splitter.setStretchFactor(0, 3)
         self.action_splitter.setStretchFactor(1, 2)
         self.action_splitter.setSizes([600, 400])
-
         self.dashboard_layout.addWidget(self.action_splitter)
 
     def _build_analysis_section(self) -> None:
-        self.analysis_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.analysis_splitter.setChildrenCollapsible(False)
-        self.analysis_splitter.setHandleWidth(8)
-
+        self.analysis_splitter = self._new_splitter()
         self.gauge = CircularGauge()
-        self.gauge.setMinimumSize(220, 220)
-        self.gauge.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Expanding,
-        )
-
         self.system_info = SystemInfo()
-        self.system_info.setMinimumSize(320, 220)
-        self.system_info.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Expanding,
-        )
-
+        self.gauge.setMinimumSize(240, 240)
+        self.system_info.setMinimumSize(320, 240)
+        self.gauge.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.system_info.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.analysis_splitter.addWidget(self.gauge)
         self.analysis_splitter.addWidget(self.system_info)
         self.analysis_splitter.setStretchFactor(0, 2)
         self.analysis_splitter.setStretchFactor(1, 3)
         self.analysis_splitter.setSizes([400, 600])
-
         self.dashboard_layout.addWidget(self.analysis_splitter)
 
-    def _build_activity_section(self) -> None:
-        self.activity_splitter = QSplitter(Qt.Orientation.Horizontal)
-        self.activity_splitter.setChildrenCollapsible(False)
-        self.activity_splitter.setHandleWidth(8)
+    def _build_day6_overview_section(self) -> None:
+        self.overview_splitter = self._new_splitter()
+        self.recent_scan_panel = RecentScanPanel()
+        self.system_status_card = SystemStatusCard()
+        self.recent_scan_panel.setMinimumHeight(245)
+        self.system_status_card.setMinimumHeight(245)
+        self.overview_splitter.addWidget(self.recent_scan_panel)
+        self.overview_splitter.addWidget(self.system_status_card)
+        self.overview_splitter.setStretchFactor(0, 1)
+        self.overview_splitter.setStretchFactor(1, 1)
+        self.overview_splitter.setSizes([500, 500])
+        self.dashboard_layout.addWidget(self.overview_splitter)
 
+    def _build_activity_section(self) -> None:
+        self.activity_splitter = self._new_splitter()
         self.activity = ActivityWidget()
         self.progress_card = ProgressCard()
-
-        self.activity.setMinimumHeight(165)
-        self.progress_card.setMinimumHeight(165)
+        self.activity.setMinimumHeight(180)
+        self.progress_card.setMinimumHeight(180)
         self.progress_card.setObjectName("card")
-
         self.activity_splitter.addWidget(self.activity)
         self.activity_splitter.addWidget(self.progress_card)
         self.activity_splitter.setStretchFactor(0, 2)
         self.activity_splitter.setStretchFactor(1, 1)
-        self.activity_splitter.setSizes([650, 350])
-
+        self.activity_splitter.setSizes([660, 340])
         self.dashboard_layout.addWidget(self.activity_splitter)
 
+    @staticmethod
+    def _new_splitter() -> QSplitter:
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(8)
+        return splitter
+
     def _ensure_sidebar_help_action(self) -> None:
-        """Add the Help navigation item required by the dashboard design."""
         sidebar_layout = self.sidebar.layout()
         if sidebar_layout is None:
             return
-
-        existing_buttons = self.sidebar.findChildren(QPushButton)
-        if any(button.text().strip().lower() == "help" for button in existing_buttons):
+        if any(button.text().strip().lower() == "help" for button in self.sidebar.findChildren(QPushButton)):
             return
-
         help_button = QPushButton("Help")
         help_button.setCursor(Qt.CursorShape.PointingHandCursor)
         help_button.clicked.connect(self.show_about)
-        # Sidebar ends with a stretch, so insert Help immediately before it.
         sidebar_layout.insertWidget(max(0, sidebar_layout.count() - 1), help_button)
 
     def setup_menu(self) -> None:
@@ -238,25 +209,21 @@ class MainWindow(QMainWindow):
         tools_menu = self.menuBar().addMenu("Tools")
         help_menu = self.menuBar().addMenu("Help")
 
-        exit_action = file_menu.addAction("Exit")
-        reset_action = tools_menu.addAction("Reset Dashboard")
-        fullscreen_action = tools_menu.addAction("Toggle Full Screen")
-        about_action = help_menu.addAction("About NeuroFence")
-
-        exit_action.triggered.connect(self.close)
-        reset_action.triggered.connect(self.reset_dashboard)
-        fullscreen_action.triggered.connect(self.toggle_fullscreen)
-        about_action.triggered.connect(self.show_about)
+        file_menu.addAction("Exit").triggered.connect(self.close)
+        tools_menu.addAction("Reset Dashboard").triggered.connect(self.reset_dashboard)
+        tools_menu.addAction("Toggle Full Screen").triggered.connect(self.toggle_fullscreen)
+        tools_menu.addAction("Display Latest Report").triggered.connect(self.display_report)
+        help_menu.addAction("About NeuroFence").triggered.connect(self.show_about)
 
     def connect_signals(self) -> None:
-        self.scan_card.scan_button.clicked.connect(self.start_scan)
-        self.upload_card.button.clicked.connect(self._model_selection_changed)
+        self.scan_card.scan_button.clicked.connect(self.run_scan)
+        self.upload_card.button.clicked.connect(self.load_model)
 
     # ------------------------------------------------------------------
-    # Responsive behaviour
+    # Responsive layout
     # ------------------------------------------------------------------
 
-    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt API name)
+    def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
         self._update_responsive_layout()
 
@@ -264,37 +231,33 @@ class MainWindow(QMainWindow):
         compact = self.width() < self.COMPACT_WIDTH
         if compact == self._compact_mode:
             return
-
         self._compact_mode = compact
+        self.sidebar.setFixedWidth(175 if compact else 240)
 
-        sidebar_width = 175 if compact else 240
-        self.sidebar.setFixedWidth(sidebar_width)
-
-        orientation = (
-            Qt.Orientation.Vertical if compact else Qt.Orientation.Horizontal
-        )
+        orientation = Qt.Orientation.Vertical if compact else Qt.Orientation.Horizontal
         for splitter in (
             self.action_splitter,
             self.analysis_splitter,
+            self.overview_splitter,
             self.activity_splitter,
         ):
             splitter.setOrientation(orientation)
 
         self._arrange_stat_cards(compact)
-
         if compact:
-            self.action_splitter.setSizes([210, 210])
-            self.analysis_splitter.setSizes([245, 245])
-            self.activity_splitter.setSizes([175, 175])
+            self.action_splitter.setSizes([220, 220])
+            self.analysis_splitter.setSizes([260, 260])
+            self.overview_splitter.setSizes([245, 245])
+            self.activity_splitter.setSizes([190, 190])
         else:
             self.action_splitter.setSizes([600, 400])
             self.analysis_splitter.setSizes([400, 600])
+            self.overview_splitter.setSizes([500, 500])
             self.activity_splitter.setSizes([660, 340])
 
     def _arrange_stat_cards(self, compact: bool) -> None:
         for card in self.stat_cards:
             self.stats_layout.removeWidget(card)
-
         if compact:
             for row, card in enumerate(self.stat_cards):
                 self.stats_layout.addWidget(card, row, 0)
@@ -306,107 +269,107 @@ class MainWindow(QMainWindow):
                 self.stats_layout.setColumnStretch(column, 1)
 
     # ------------------------------------------------------------------
-    # Dashboard state helpers
+    # Day 6 backend integration boundaries
     # ------------------------------------------------------------------
 
-    def _add_log(self, message: str, level: str = "INFO") -> None:
-        """Append a timestamped, enterprise-style log entry."""
-        timestamp = __import__("datetime").datetime.now().strftime("%H:%M:%S")
-        self.logs_widget.add_log(f"[{timestamp}] [{level}] {message}")
+    def load_model(self) -> None:
+        """Prepare selected model metadata for the dashboard.
 
-    @staticmethod
-    def _set_info_card_value(card: InfoCard, value: str) -> None:
-        """Update an existing InfoCard without requiring widget API changes."""
-        value_label = card.findChild(QLabel, "cardValue")
-        if value_label is not None:
-            value_label.setText(value)
+        Future integration point: connect Tanvi's Model Loader & Sandbox here.
+        The UploadCard opens the folder dialog before this slot is called.
+        """
+        model_path = self.upload_card.model_path
+        if not model_path:
+            return
+        model_name = Path(model_path).name or model_path
+        self._set_info_card_value(self.card_models, "1")
+        self.activity.add_activity(f"Model loaded: {model_name}")
+        self.logs_widget.add_log(f"Model selected: {model_name}", "INFO")
+        self.statusBar().showMessage(f"Model ready: {model_name}")
+        self.update_statistics(models_loaded=1)
 
-    def _model_selection_changed(self) -> None:
-        # QFileDialog runs before this slot because UploadCard connected first.
-        if self.upload_card.model_path:
-            self._set_info_card_value(self.card_models, "1")
-            self.activity.add_activity("Model folder selected")
-            self._add_log(f"Selected model: {self.upload_card.model_path}")
-            self.statusBar().showMessage("Model folder loaded and ready to scan")
+    def run_scan(self) -> None:
+        """Run the current simulation without blocking the UI.
 
-    def reset_dashboard(self) -> None:
-        self.scan_timer.stop()
-        self._scan_step_index = 0
-        self.scan_card.scan_button.setEnabled(True)
-        self.scan_card.status.setText("Status : Ready")
-        self.progress_card.progress.setValue(0)
-        self.gauge.setValue(5)
-
-        self.activity.list.clear()
-        self.activity.add_activity("NeuroFence initialized")
-        self.activity.add_activity("Waiting for model")
-
-        self.logs_widget.logs.clear()
-        self._add_log("NeuroFence initialized")
-        self._add_log("Waiting for model upload")
-        self._add_log("System ready", "SUCCESS")
-
-        self._set_info_card_value(
-            self.card_models,
-            "1" if self.upload_card.model_path else "0",
-        )
-        self._set_info_card_value(self.card_threat, "0%")
-        self._set_info_card_value(self.card_status, "Ready")
-        self.statusBar().showMessage("✔ Dashboard reset | Ready")
-
-    # ------------------------------------------------------------------
-    # Scan demo
-    # ------------------------------------------------------------------
-
-    def start_scan(self) -> None:
+        Future integration points:
+        - Tanvi: load and sandbox the selected model.
+        - Akhina: track model activations and dormant neurons.
+        - Dhruti: run detection, fuzzing and threat-score calculation.
+        """
         if self.scan_timer.isActive():
             return
 
+        model_name = self._current_model_name()
         if not self.upload_card.model_path:
-            self._add_log(
-                "No model folder selected; running demonstration scan",
-                "WARNING",
-            )
+            self.logs_widget.add_log("No model selected; using demonstration data", "WARNING")
 
-        self.logs_widget.logs.clear()
+        self.logs_widget.clear_logs()
         self.activity.list.clear()
         self.progress_card.progress.setValue(0)
-        self.gauge.setValue(5)
-        self.scan_card.status.setText("Status : Scanning")
+        if hasattr(self.progress_card, "set_stage"):
+            self.progress_card.set_stage("Ready to scan")
+        self.gauge.setValue(0)
+        self.scan_card.status.setText("●  Scan in progress")
         self.scan_card.scan_button.setEnabled(False)
-
-        self._set_info_card_value(self.card_threat, "Scanning...")
-        self._set_info_card_value(self.card_status, "Scanning")
-        if self.upload_card.model_path:
-            self._set_info_card_value(self.card_models, "1")
-
-        self.statusBar().showMessage("Initializing security scan...")
+        self.recent_scan_panel.set_result("SCANNING")
+        self.system_status_card.set_scanner_status("Scanning", "scanning")
+        self.update_dashboard("Scanning")
+        self.update_statistics(threat_score=0, status="Scanning")
+        self._scan_started_at = perf_counter()
 
         self._scan_steps = [
-            (10, 10, "Security scan started", "Initializing NeuroFence..."),
-            (25, 18, "Checking model structure", "Checking model architecture..."),
-            (40, 30, "Loading model weights", "Loading model weights..."),
-            (
-                60,
-                45,
-                "Searching dormant neurons",
-                "Scanning hidden neuron activations...",
-            ),
-            (
-                80,
-                65,
-                "Running adversarial prompts",
-                "Executing prompt fuzzing...",
-            ),
-            (
-                95,
-                18,
-                "Generating security report",
-                "Generating analysis report...",
-            ),
+            {"progress": 8, "threat": 2, "activity": "Initialize scanner", "message": "Initializing scanner"},
+            {"progress": 18, "threat": 4, "activity": "Load model metadata", "message": f"Loading model metadata for {model_name}"},
+            {"progress": 30, "threat": 6, "activity": "Verify model structure", "message": "Verifying model architecture and files"},
+            {"progress": 45, "threat": 10, "activity": "Analyze weight tensors", "message": "Analyzing model weight tensors"},
+            {"progress": 58, "threat": 14, "activity": "Search dormant neurons", "message": "Searching for dormant neuron patterns"},
+            {"progress": 72, "threat": 20, "activity": "Execute adversarial prompts", "message": "Executing adversarial prompt tests"},
+            {"progress": 84, "threat": 18, "activity": "Calculate threat score", "message": "Calculating overall threat score"},
+            {"progress": 94, "threat": 18, "activity": "Generate summary", "message": "Generating scan summary"},
+            {"progress": 100, "threat": 18, "activity": "Complete scan", "message": "Scan workflow completed", "level": "SUCCESS"},
         ]
         self._scan_step_index = 0
         self.scan_timer.start()
+
+    def update_dashboard(self, status: str = "Protected") -> None:
+        """Update high-level dashboard state.
+
+        Future backend event handlers can call this method after receiving a
+        loader, activation-tracker or detection result.
+        """
+        self.top_bar.set_system_status(status)
+        self.card_status_value(status)
+
+    def update_statistics(
+        self,
+        *,
+        models_loaded: int | None = None,
+        threat_score: int | None = None,
+        status: str | None = None,
+    ) -> None:
+        """Central place for backend modules to publish dashboard statistics."""
+        if models_loaded is not None:
+            self._set_info_card_value(self.card_models, str(models_loaded))
+        if threat_score is not None:
+            self._set_info_card_value(self.card_threat, f"{threat_score}%")
+        if status is not None:
+            self._set_info_card_value(self.card_status, status)
+
+    def display_report(self) -> None:
+        """Placeholder for the future report-generation module."""
+        QMessageBox.information(
+            self,
+            "NeuroFence Report",
+            "Report integration is prepared. The backend-generated report will be displayed here.",
+        )
+
+    # Keep the older method name compatible with Day 5 code.
+    def start_scan(self) -> None:
+        self.run_scan()
+
+    # ------------------------------------------------------------------
+    # Scan simulation helpers
+    # ------------------------------------------------------------------
 
     def _run_next_scan_step(self) -> None:
         if self._scan_step_index >= len(self._scan_steps):
@@ -414,45 +377,108 @@ class MainWindow(QMainWindow):
             self._finish_scan()
             return
 
-        progress, threat, activity_text, log_text = self._scan_steps[
-            self._scan_step_index
-        ]
+        step = self._scan_steps[self._scan_step_index]
+        progress = int(step["progress"])
+        threat = int(step["threat"])
+        activity_text = str(step["activity"])
+        message = str(step["message"])
+        level = str(step.get("level", "INFO"))
+
         self.progress_card.progress.setValue(progress)
+        if hasattr(self.progress_card, "set_stage"):
+            self.progress_card.set_stage(activity_text)
         self.gauge.setValue(threat)
         self.activity.add_activity(activity_text)
-        self._add_log(log_text)
-        self.statusBar().showMessage(activity_text)
+        self.logs_widget.add_log(message, level)
+        self.statusBar().showMessage(f"{progress}% | {activity_text}")
+        self.update_statistics(threat_score=threat, status="Scanning")
         self._scan_step_index += 1
 
     def _finish_scan(self) -> None:
+        duration = max(0.1, perf_counter() - self._scan_started_at)
+        threat_score = 18
+        result = "SAFE"
+        model_name = self._current_model_name()
+
+        self.logs_widget.add_log("No suspicious weights detected", "SUCCESS")
+        self.logs_widget.add_log("No dormant backdoor trigger found", "SAFE")
+        self.logs_widget.add_log("Scan completed successfully", "SAFE")
         self.activity.add_activity("Scan completed successfully")
-        self._add_log("No weight poisoning detected", "SAFE")
-        self._add_log("No dormant backdoor trigger found", "SAFE")
-        self._add_log("Threat score: 18%", "INFO")
-        self._add_log("Model status: SAFE", "SUCCESS")
 
         self.progress_card.progress.setValue(100)
-        self.gauge.setValue(18)
-        self.scan_card.status.setText("Status : Protected")
+        if hasattr(self.progress_card, "set_stage"):
+            self.progress_card.set_stage("Scan completed — model classified SAFE")
+        self.gauge.setValue(threat_score)
+        self.scan_card.status.setText("●  Protected — no active threat")
         self.scan_card.scan_button.setEnabled(True)
-
-        self._set_info_card_value(
-            self.card_models,
-            "1" if self.upload_card.model_path else "Demo",
+        self.system_status_card.set_scanner_status("Protected", "normal")
+        self.recent_scan_panel.update_scan(
+            scan_time=datetime.now().strftime("%d %b %Y, %I:%M %p"),
+            model_name=model_name,
+            threat_score=threat_score,
+            duration_seconds=duration,
+            result=result,
         )
-        self._set_info_card_value(self.card_threat, "18%")
-        self._set_info_card_value(self.card_status, "Protected")
-        self.statusBar().showMessage("✔ Scan completed successfully")
+
+        self.last_threat_score = threat_score
+        self.last_scan_result = result
+        self.update_dashboard("Protected")
+        self.update_statistics(
+            models_loaded=1 if self.upload_card.model_path else 0,
+            threat_score=threat_score,
+            status="Protected",
+        )
+        self.statusBar().showMessage(f"Scan complete | {result} | Threat score {threat_score}%")
 
     # ------------------------------------------------------------------
-    # Window actions
+    # Shared helpers and window actions
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _set_info_card_value(card: InfoCard, value: str) -> None:
+        if hasattr(card, "set_value"):
+            card.set_value(value)
+            return
+        label = card.findChild(QLabel, "cardValue")
+        if label is not None:
+            label.setText(value)
+
+    def card_status_value(self, status: str) -> None:
+        self._set_info_card_value(self.card_status, status)
+
+    def _current_model_name(self) -> str:
+        if not self.upload_card.model_path:
+            return "Demo Model"
+        return Path(self.upload_card.model_path).name or "Selected Model"
+
+    def reset_dashboard(self) -> None:
+        self.scan_timer.stop()
+        self._scan_step_index = 0
+        self.scan_card.scan_button.setEnabled(True)
+        self.scan_card.status.setText("●  Ready for analysis")
+        self.progress_card.progress.setValue(0)
+        if hasattr(self.progress_card, "set_stage"):
+            self.progress_card.set_stage("Ready to scan")
+        self.gauge.setValue(0)
+        self.activity.list.clear()
+        self.activity.add_activity("NeuroFence initialized")
+        self.activity.add_activity("Waiting for model")
+        self.logs_widget.clear_logs()
+        self.logs_widget.add_log("NeuroFence initialized", "INFO")
+        self.logs_widget.add_log("Waiting for model upload", "INFO")
+        self.logs_widget.add_log("Scanner ready", "SUCCESS")
+        self.recent_scan_panel.reset()
+        self.system_status_card.set_scanner_status("Ready", "normal")
+        self.update_statistics(
+            models_loaded=1 if self.upload_card.model_path else 0,
+            threat_score=0,
+            status="Protected",
+        )
+        self.update_dashboard("Protected")
+        self.statusBar().showMessage("Dashboard reset | Ready")
 
     def toggle_fullscreen(self) -> None:
-        if self.isFullScreen():
-            self.showNormal()
-        else:
-            self.showFullScreen()
+        self.showNormal() if self.isFullScreen() else self.showFullScreen()
 
     def show_about(self) -> None:
         QMessageBox.about(
@@ -460,8 +486,7 @@ class MainWindow(QMainWindow):
             "About NeuroFence",
             (
                 "<b>NeuroFence v1.0</b><br><br>"
-                "Enterprise AI Security Platform<br>"
-                "LLM Weight Poisoning &amp; Backdoor Scanner<br><br>"
-                "Developed using PyQt6"
+                "LLM Weight Poisoning &amp; Backdoor Scanner<br>"
+                "Enterprise cybersecurity dashboard built with PyQt6."
             ),
         )

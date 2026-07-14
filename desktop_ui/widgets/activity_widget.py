@@ -1,42 +1,32 @@
-from PyQt6.QtWidgets import (
-    QWidget,
-    QLabel,
-    QListWidget,
-    QVBoxLayout,
-)
+from datetime import datetime
+
+from PyQt6.QtWidgets import QLabel, QListWidget, QListWidgetItem, QVBoxLayout, QWidget
 
 
 class ActivityWidget(QWidget):
-
     def __init__(self):
         super().__init__()
+        self.setObjectName("card")
 
-        layout = QVBoxLayout()
-
-        self.setLayout(layout)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 20)
+        layout.setSpacing(12)
 
         title = QLabel("Recent Activity")
-
-        title.setStyleSheet("""
-
-            color:#58A6FF;
-            font-size:18px;
-            font-weight:bold;
-
-        """)
-
-        layout.addWidget(title)
+        title.setObjectName("cardTitle")
+        subtitle = QLabel("Live scanner workflow and security events")
+        subtitle.setObjectName("cardDescription")
 
         self.list = QListWidget()
+        self.list.setObjectName("activityList")
+        self.add_activity("NeuroFence initialized")
+        self.add_activity("Waiting for model")
 
-        self.list.addItem("NeuroFence initialized")
-
-        self.list.addItem("Waiting for model")
-
-        layout.addWidget(self.list)
+        layout.addWidget(title)
+        layout.addWidget(subtitle)
+        layout.addWidget(self.list, 1)
 
     def add_activity(self, text):
-
-        self.list.addItem(text)
-
+        item = QListWidgetItem(f"{datetime.now().strftime('%H:%M:%S')}   {text}")
+        self.list.addItem(item)
         self.list.scrollToBottom()
