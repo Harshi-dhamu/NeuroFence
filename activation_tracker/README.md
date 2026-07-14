@@ -39,15 +39,13 @@ activation_tracker/
 Implemented
 
 - Package structure
-- ActivationTracker interface
 - Forward hook registration
-- Selective layer tracking
-- Activation metadata collection
-- Safe hook cleanup
+- Activation extraction
+- Layer-wise activation storage
+- Activation statistics
 
 Upcoming
 
-- Activation statistics
-- Analyzer integration
-- Export utilities
-
+- Dormant neuron detection
+- Activation export
+- Visualization support

@@ -7,6 +7,7 @@ Main Activation Tracker interface.
 from typing import Any, Dict
 
 from .hooks import HookManager
+from .analyzer import ActivationAnalyzer
 
 
 class ActivationTracker:
@@ -19,13 +20,27 @@ class ActivationTracker:
         self.hook_manager = HookManager()
 
     def start_tracking(self):
-        """Register hooks."""
+        """
+        Register forward hooks.
+        """
         self.hook_manager.register_hooks(self.model)
 
     def stop_tracking(self):
-        """Remove hooks."""
+        """
+        Remove hooks.
+        """
         self.hook_manager.remove_hooks()
 
     def get_activations(self) -> Dict[str, Any]:
-        """Return captured activations."""
+        """
+        Return captured activations.
+        """
         return self.hook_manager.activations
+
+    def get_statistics(self):
+        """
+        Return activation statistics.
+        """
+        return ActivationAnalyzer.compute_statistics(
+            self.get_activations()
+        )

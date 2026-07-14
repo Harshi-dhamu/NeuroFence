@@ -1,27 +1,40 @@
 """
 analyzer.py
 
-Utilities for activation analysis.
-
-Analysis algorithms will
-be implemented later.
+Activation statistics for tracked neural network layers.
 """
+
+from typing import Dict, Any
+
+import torch
 
 
 class ActivationAnalyzer:
     """
-    Placeholder analyzer.
+    Computes statistics for stored activations.
     """
 
-    def analyze(self, activations):
+    @staticmethod
+    def compute_statistics(
+        activations: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
         """
-        Analyze activations.
+        Compute statistics for every tracked layer.
+        """
 
-        Returns
-        -------
-        dict
-        """
-        return {
-            "status": "Analyzer not implemented yet.",
-            "num_layers": len(activations)
-        }
+        statistics = {}
+
+        for layer_name, info in activations.items():
+
+            tensor = info["activation"]
+
+            statistics[layer_name] = {
+                "layer_type": info["layer_type"],
+                "shape": info["shape"],
+                "mean": float(torch.mean(tensor)),
+                "variance": float(torch.var(tensor)),
+                "maximum": float(torch.max(tensor)),
+                "minimum": float(torch.min(tensor)),
+            }
+
+        return statistics
