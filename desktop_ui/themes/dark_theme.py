@@ -108,6 +108,52 @@ def get_dark_theme():
     QMenu::item:selected { background:#0D3150; }
     QStatusBar { background:#0B1727; color:#7F93AA; border-top:1px solid #1D2A3B; }
     QMessageBox { background:#0D1B2D; }
+
+    QWidget#pageContent, QStackedWidget#pageStack, QScrollArea#ReportsPage, QScrollArea#HistoryPage {
+        background: #07111F;
+    }
+    QLabel#pageTitle { color:#F8FAFC; font-size:25pt; font-weight:800; }
+    QLabel#pageSubtitle { color:#8EA0B8; font-size:10.5pt; }
+    QLabel#sectionTitle { color:#EEF6FF; font-size:16pt; font-weight:750; }
+
+    QFrame#ReportSummaryCard, QFrame#ThreatStatistics, QFrame#glassPanel, QFrame#glassToolbar {
+        background: rgba(13, 27, 45, 218);
+        border: 1px solid rgba(104, 164, 213, 48);
+        border-radius: 18px;
+    }
+    QFrame#ReportSummaryCard { border-top: 2px solid rgba(45, 212, 191, 180); }
+    QFrame#ThreatStatistics { border-top: 2px solid rgba(56, 189, 248, 180); }
+    QFrame#glassInnerCard {
+        background: rgba(7, 19, 31, 178);
+        border: 1px solid rgba(125, 211, 252, 38);
+        border-radius: 13px;
+    }
+    QLabel#reportMetricValue { color:#F8FAFC; font-size:17pt; font-weight:800; }
+    QLabel#safeValue { color:#2DD4BF; font-size:17pt; font-weight:800; }
+    QLabel#recommendationText {
+        color:#B9C9DA; background:rgba(7,19,31,150); border:1px solid rgba(45,212,191,42);
+        border-radius:10px; padding:12px; line-height:1.4;
+    }
+    QLabel#criticalStat { color:#FB7185; font-size:24pt; font-weight:850; }
+    QLabel#mediumStat { color:#FBBF24; font-size:24pt; font-weight:850; }
+    QLabel#lowStat { color:#60A5FA; font-size:24pt; font-weight:850; }
+    QLabel#safeStat { color:#2DD4BF; font-size:24pt; font-weight:850; }
+
+    QLineEdit#historySearch {
+        background:rgba(7,19,31,190); color:#E2E8F0; border:1px solid #29445F;
+        border-radius:10px; padding:11px 13px; selection-background-color:#0EA5E9;
+    }
+    QLineEdit#historySearch:focus { border:1px solid #38BDF8; }
+    QTableWidget#HistoryTable {
+        background:rgba(7,19,31,180); alternate-background-color:rgba(13,32,51,170);
+        border:1px solid rgba(104,164,213,42); border-radius:12px; color:#C9D7E7;
+        gridline-color:transparent; selection-background-color:#123B58; selection-color:#F8FAFC;
+    }
+    QTableWidget#HistoryTable::item { padding:10px; border-bottom:1px solid rgba(104,164,213,26); }
+    QHeaderView::section {
+        background:#0B1E31; color:#7DD3FC; border:none; border-bottom:1px solid #29445F;
+        padding:12px; font-weight:700;
+    }
     """
 
 

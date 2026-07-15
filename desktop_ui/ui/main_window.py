@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, Qt
 from PyQt6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
@@ -14,8 +14,10 @@ from PyQt6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QGraphicsOpacityEffect,
     QScrollArea,
     QSizePolicy,
+    QStackedWidget,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -26,6 +28,8 @@ from desktop_ui.components.recent_scan_panel import RecentScanPanel
 from desktop_ui.components.system_info import SystemInfo
 from desktop_ui.components.system_status_card import SystemStatusCard
 from desktop_ui.components.top_bar import TopBar
+from desktop_ui.pages.history_page import HistoryPage
+from desktop_ui.pages.reports_page import ReportsPage
 from desktop_ui.widgets.activity_widget import ActivityWidget
 from desktop_ui.widgets.info_card import InfoCard
 from desktop_ui.widgets.logs_widget import LogsWidget
@@ -79,20 +83,23 @@ class MainWindow(QMainWindow):
 
         self.sidebar = Sidebar()
         self.sidebar.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        self._ensure_sidebar_help_action()
         root_layout.addWidget(self.sidebar)
 
+        self.page_stack = QStackedWidget()
+        self.page_stack.setObjectName("pageStack")
+        root_layout.addWidget(self.page_stack, 1)
+
         self.scroll_area = QScrollArea()
+        self.scroll_area.setObjectName("DashboardPage")
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
         self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        root_layout.addWidget(self.scroll_area, 1)
+        self.page_stack.addWidget(self.scroll_area)
 
         self.dashboard_widget = QWidget()
         self.dashboard_widget.setObjectName("dashboardWidget")
         self.scroll_area.setWidget(self.dashboard_widget)
-
         self.dashboard_layout = QVBoxLayout(self.dashboard_widget)
         self.dashboard_layout.setContentsMargins(28, 28, 28, 28)
         self.dashboard_layout.setSpacing(26)
@@ -100,7 +107,6 @@ class MainWindow(QMainWindow):
         self.top_bar = TopBar()
         self.top_bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.dashboard_layout.addWidget(self.top_bar)
-
         self._build_statistics_section()
         self._build_action_section()
         self._build_analysis_section()
@@ -112,6 +118,12 @@ class MainWindow(QMainWindow):
         self.logs_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.dashboard_layout.addWidget(self.logs_widget, 1)
 
+        self.reports_page = ReportsPage()
+        self.history_page = HistoryPage()
+        self.page_stack.addWidget(self.reports_page)
+        self.page_stack.addWidget(self.history_page)
+        self._page_indexes = {"dashboard": 0, "models": 0, "scan": 0, "reports": 1, "history": 2}
+        self._page_animation = None
     def _build_statistics_section(self) -> None:
         self.stats_container = QWidget()
         self.stats_layout = QGridLayout(self.stats_container)
@@ -218,6 +230,41 @@ class MainWindow(QMainWindow):
     def connect_signals(self) -> None:
         self.scan_card.scan_button.clicked.connect(self.run_scan)
         self.upload_card.button.clicked.connect(self.load_model)
+        self.sidebar.page_requested.connect(self.navigate_to)
+        self.history_page.export_requested.connect(self.export_report)
+        self.history_page.filter_requested.connect(self.filter_history)
+        self.history_page.search_requested.connect(self.search_history)
+
+    def navigate_to(self, page_name: str) -> None:
+        """Open a sidebar page while preserving the dashboard state."""
+        if page_name == "help":
+            self.show_about()
+            self.sidebar.select_page("dashboard" if self.page_stack.currentIndex() == 0 else page_name)
+            return
+        if page_name == "settings":
+            QMessageBox.information(self, "Settings", "Settings page integration is prepared for a future sprint.")
+            return
+        index = self._page_indexes.get(page_name, 0)
+        self.page_stack.setCurrentIndex(index)
+        self.sidebar.select_page(page_name)
+        if page_name == "models":
+            self.scroll_area.verticalScrollBar().setValue(self.upload_card.y())
+        elif page_name == "scan":
+            self.scroll_area.verticalScrollBar().setValue(self.scan_card.y())
+        self._animate_current_page()
+
+    def _animate_current_page(self) -> None:
+        page = self.page_stack.currentWidget()
+        effect = QGraphicsOpacityEffect(page)
+        page.setGraphicsEffect(effect)
+        animation = QPropertyAnimation(effect, b"opacity", self)
+        animation.setDuration(240)
+        animation.setStartValue(0.18)
+        animation.setEndValue(1.0)
+        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+        animation.finished.connect(lambda: page.setGraphicsEffect(None))
+        self._page_animation = animation
+        animation.start()
 
     # ------------------------------------------------------------------
     # Responsive layout
@@ -356,12 +403,32 @@ class MainWindow(QMainWindow):
             self._set_info_card_value(self.card_status, status)
 
     def display_report(self) -> None:
-        """Placeholder for the future report-generation module."""
-        QMessageBox.information(
-            self,
-            "NeuroFence Report",
-            "Report integration is prepared. The backend-generated report will be displayed here.",
-        )
+        """Display the report page; backend PDF/details will connect here later."""
+        self.navigate_to("reports")
+
+    def load_scan_history(self) -> None:
+        """Placeholder: load persisted scan records from the future storage backend."""
+        self.logs_widget.add_log("Scan history interface refreshed", "INFO")
+
+    def generate_report(self) -> None:
+        """Placeholder: connect generated findings from the detection backend here."""
+        self.navigate_to("reports")
+
+    def refresh_statistics(self) -> None:
+        """Placeholder: refresh aggregate report metrics from stored scan results."""
+        self.reports_page.threat_statistics.set_statistics(critical=0, medium=2, low=5, safe=17)
+
+    def export_report(self) -> None:
+        """Placeholder: export reports/history to PDF or CSV in a future sprint."""
+        QMessageBox.information(self, "Export Prepared", "Export workflow is ready for backend implementation.")
+
+    def search_history(self, query: str = "") -> None:
+        """Search hook; the current table performs local filtering immediately."""
+        self.statusBar().showMessage(f"History search: {query or 'all records'}")
+
+    def filter_history(self) -> None:
+        """Placeholder: advanced date/result filters will be connected later."""
+        QMessageBox.information(self, "History Filters", "Advanced history filters will be connected here.")
 
     # Keep the older method name compatible with Day 5 code.
     def start_scan(self) -> None:
@@ -419,6 +486,17 @@ class MainWindow(QMainWindow):
             duration_seconds=duration,
             result=result,
         )
+
+        recommendation = "No suspicious behaviour detected. Continue routine monitoring."
+        scan_time = datetime.now().strftime("%d %b %Y, %I:%M %p")
+        self.reports_page.update_latest_report(
+            model_name, result, threat_score, duration, scan_time, recommendation
+        )
+        self.history_page.history_table.add_scan(
+            f"NF-{self.history_page.history_table.rowCount() + 20:04d}",
+            model_name, scan_time, f"{threat_score}%", result
+        )
+        self.refresh_statistics()
 
         self.last_threat_score = threat_score
         self.last_scan_result = result
