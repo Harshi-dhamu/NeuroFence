@@ -43,9 +43,10 @@ Implemented
 - Activation extraction
 - Layer-wise activation storage
 - Activation statistics
+- Dormant neuron activity analysis
 
 Upcoming
 
-- Dormant neuron detection
-- Activation export
+- Activation logger
 - Visualization support
+- Layer comparison

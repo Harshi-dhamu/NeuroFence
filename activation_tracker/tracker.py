@@ -44,3 +44,10 @@ class ActivationTracker:
         return ActivationAnalyzer.compute_statistics(
             self.get_activations()
         )
+    def analyze_neuron_activity(self, threshold=1e-5):
+        """Analyze neuron activity for all tracked layers."""
+
+        return ActivationAnalyzer.analyze_neuron_activity(
+        self.get_activations(),
+        threshold,
+    )
