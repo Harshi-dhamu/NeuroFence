@@ -4,7 +4,8 @@ Helper methods dedicated to local file system validation and cryptographic check
 """
 
 import os
-from typing import List
+import json
+from typing import List, Dict, Any, Optional
 
 def check_directory_exists(path: str) -> bool:
     """
@@ -46,3 +47,20 @@ def verify_file_integrity(file_path: str) -> bool:
         return os.path.getsize(file_path) > 0
     except OSError:
         return False
+
+def load_json_config(file_path: str) -> Optional[Dict[str, Any]]:
+    """
+    Safely reads and deserializes a JSON file.
+    Catches errors gracefully to prevent system-wide loader crashes.
+    
+    :param file_path: Path to the target JSON configuration.
+    :return: Dictionary with configuration options, or None if parsing fails.
+    """
+    if not verify_file_integrity(file_path):
+        return None
+        
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError, ValueError):
+        return None

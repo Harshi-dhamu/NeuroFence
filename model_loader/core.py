@@ -5,7 +5,7 @@ Responsible for safe interaction with local Hugging Face model directories.
 
 import os
 from typing import Dict, Any, Optional
-from .utils import check_directory_exists, locate_model_files, verify_file_integrity
+from .utils import check_directory_exists, locate_model_files, verify_file_integrity, load_json_config
 
 class ModelLoader:
     """
@@ -25,7 +25,8 @@ class ModelLoader:
         self.metadata: Dict[str, Any] = {
             "detected_safetensors": [],
             "detected_pytorch_bin": [],
-            "has_config": False
+            "has_config": False,
+            "raw_config": {}
         }
 
     def scan_model_directory(self) -> bool:
@@ -80,9 +81,19 @@ class ModelLoader:
 
     def extract_metadata(self) -> Dict[str, Any]:
         """
-        Parses config.json to extract model architecture specifics.
-        (To be fully implemented in Day 4/5).
+        Parses config.json to extract basic model architecture details.
+        
+        :return: Updated metadata tracking dictionary.
         """
+        if not self.is_validated and not self.validate_weights():
+            return self.metadata
+
+        config_path = os.path.join(self.model_path, "config.json")
+        config_data = load_json_config(config_path)
+        
+        if config_data:
+            self.metadata["raw_config"] = config_data
+            
         return self.metadata
 
     def load_safely(self) -> Optional[Any]:
