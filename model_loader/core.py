@@ -1,17 +1,20 @@
 """
 core.py - Core Model Loading and Verification Engine
-Responsible for safe interaction and deep structural validation of local Hugging Face model directories.
+Responsible for safe interaction, structural validation, and memory analysis of local Hugging Face models.
 """
 
 import os
 from typing import Dict, Any, Optional
-from .utils import check_directory_exists, locate_model_files, verify_file_integrity, load_json_config
+from .utils import (
+    check_directory_exists, locate_model_files, verify_file_integrity, 
+    load_json_config, calculate_precision_footprint
+)
 from .sandbox import SandboxEnvironment, SandboxSecurityError
 
 class ModelLoader:
     """
     Handles the safe verification, metadata extraction, deep file auditing,
-    and isolated loading of local Hugging Face transformer models.
+    memory profiling, and isolated loading of local Hugging Face transformer models.
     """
     
     def __init__(self, model_path: str):
@@ -37,10 +40,7 @@ class ModelLoader:
         }
 
     def scan_model_directory(self) -> bool:
-        """
-        Scans the local directory to discover weights and layout configurations.
-        Updates internal metadata map based on discovered components.
-        """
+        """Scans the local directory to discover weights and layout configurations."""
         if not check_directory_exists(self.model_path):
             self.is_validated = False
             return False
@@ -54,16 +54,11 @@ class ModelLoader:
         return True
 
     def verify_config_keys(self) -> bool:
-        """
-        Deep-audits config.json to ensure critical LLM hyperparameter definitions exist.
-        
-        :return: True if the structural configuration satisfies model criteria, False otherwise.
-        """
+        """Deep-audits config.json to ensure critical LLM hyperparameter definitions exist."""
         config = self.metadata.get("raw_config", {})
         if not config:
             return False
 
-        # Essential architectural keys required by model runners
         critical_keys = ["model_type", "vocab_size", "hidden_size", "num_hidden_layers"]
         has_keys = all(key in config for key in critical_keys)
         
@@ -71,13 +66,7 @@ class ModelLoader:
         return has_keys
 
     def verify_tokenizer_files(self) -> bool:
-        """
-        Verifies that tokenizer infrastructure configuration exists and is valid.
-        Checks for matching config and vocabulary definitions.
-        
-        :return: True if tokenizer ecosystem passes structural presence checks.
-        """
-        # A tokenizer directory should ideally contain a config and an operational map layer
+        """Verifies that tokenizer infrastructure configuration exists and is valid."""
         tokenizer_config_path = os.path.join(self.model_path, "tokenizer_config.json")
         tokenizer_model_path = os.path.join(self.model_path, "tokenizer.json")
         legacy_vocab_path = os.path.join(self.model_path, "vocab.json")
@@ -90,11 +79,7 @@ class ModelLoader:
         return is_tokenizer_valid
 
     def verify_weight_layout(self) -> bool:
-        """
-        Performs validation against model weight splits to ensure files are valid.
-        
-        :return: True if weight binaries pass integrity parameters.
-        """
+        """Performs validation against model weight splits to ensure files are valid."""
         safetensors_pool = self.metadata["detected_safetensors"]
         pytorch_pool = self.metadata["detected_pytorch_bin"]
 
@@ -111,31 +96,22 @@ class ModelLoader:
         return True
 
     def validate_weights(self) -> bool:
-        """
-        Executes the full, strict multi-stage verification pipeline.
-        
-        :return: True if all model layers pass verification tests, False otherwise.
-        """
-        # 1. Base Scan
+        """Executes the full, strict multi-stage verification pipeline."""
         if not self.scan_model_directory():
             self.is_validated = False
             return False
 
-        # 2. Basic file integrity check for config.json
         config_path = os.path.join(self.model_path, "config.json")
         if not self.metadata["has_config"] or not verify_file_integrity(config_path):
             self.is_validated = False
             return False
 
-        # Load metadata configurations for deep key auditing
         self.extract_metadata()
 
-        # 3. Comprehensive verification run
         config_ok = self.verify_config_keys()
         tokenizer_ok = self.verify_tokenizer_files()
         weights_ok = self.verify_weight_layout()
 
-        # Enforce all three critical pillars pass inspection
         self.is_validated = bool(config_ok and tokenizer_ok and weights_ok)
         return self.is_validated
 
@@ -156,6 +132,76 @@ class ModelLoader:
             return str(config["model_type"]).capitalize()
         return "Unknown Architecture"
 
+    def get_total_disk_size_bytes(self) -> int:
+        """
+        Calculates the aggregate on-disk storage size of all detected weight files.
+        
+        :return: Size in bytes.
+        """
+        total_bytes = 0
+        safetensors_pool = self.metadata["detected_safetensors"]
+        pytorch_pool = self.metadata["detected_pytorch_bin"]
+        active_pool = safetensors_pool if safetensors_pool else pytorch_pool
+
+        for file_name in active_pool:
+            file_path = os.path.join(self.model_path, file_name)
+            if os.path.exists(file_path):
+                total_bytes += os.path.getsize(file_path)
+        return total_bytes
+
+    def estimate_parameter_count(self) -> float:
+        """
+        Heuristically estimates the total model parameter count in billions based on config variables.
+        Formula mimics standard transformer layer dimensions if parameter metadata keys are absent.
+        
+        :return: Parameter count in Billions (e.g., 7.24).
+        """
+        config = self.metadata.get("raw_config", {})
+        if not config:
+            return 0.0
+
+        # High precision architectures sometimes explicitly share this parameter
+        if "num_parameters" in config:
+            return round(float(config["num_parameters"]) / 1e9, 2)
+
+        # Heuristic fallback calculation based on standard transformer layer scaling logic
+        hidden_size = config.get("hidden_size", 0)
+        num_layers = config.get("num_hidden_layers", 0)
+        vocab_size = config.get("vocab_size", 0)
+        intermediate_size = config.get("intermediate_size", hidden_size * 4)
+
+        if not (hidden_size and num_layers):
+            return 0.0
+
+        # Estimate params: Embeddings + Attention Layers + MLP blocks
+        embeddings = vocab_size * hidden_size
+        attention_per_layer = 4 * (hidden_size ** 2)
+        mlp_per_layer = 3 * hidden_size * intermediate_size
+        layer_total = num_layers * (attention_per_layer + mlp_per_layer)
+        
+        calculated_total = embeddings + layer_total
+        return round(calculated_total / 1e9, 2)
+
+    def generate_memory_profile(self) -> Dict[str, Any]:
+        """
+        Builds a comprehensive memory matrix profiling estimation metrics across formats.
+        
+        :return: Memory profiling log dictionary.
+        """
+        param_count_b = self.estimate_parameter_count()
+        disk_size_bytes = self.get_total_disk_size_bytes()
+        
+        return {
+            "estimated_parameters_billions": param_count_b,
+            "disk_size_gb": round(disk_size_bytes / (1024 ** 3), 2),
+            "estimated_runtime_ram_requirement": {
+                "fp32_precision_gb": calculate_precision_footprint(param_count_b, 32),
+                "fp16_precision_gb": calculate_precision_footprint(param_count_b, 16),
+                "int8_quantized_gb": calculate_precision_footprint(param_count_b, 8),
+                "int4_quantized_gb": calculate_precision_footprint(param_count_b, 4)
+            }
+        }
+
     def extract_metadata(self) -> Dict[str, Any]:
         """Parses config.json and tokenizer_config.json to extract deep metadata parameters."""
         config_path = os.path.join(self.model_path, "config.json")
@@ -171,7 +217,7 @@ class ModelLoader:
         return self.metadata
 
     def get_model_info(self) -> Dict[str, Any]:
-        """Compiles a summary dictionary describing structural properties and verification statuses."""
+        """Compiles a summary dictionary describing properties, verifications, and memory footprint bounds."""
         self.extract_metadata()
         config = self.metadata.get("raw_config", {})
         tokenizer = self.metadata.get("raw_tokenizer_config", {})
@@ -186,7 +232,8 @@ class ModelLoader:
             "hidden_size": config.get("hidden_size", "Unknown"),
             "num_hidden_layers": config.get("num_hidden_layers", "Unknown"),
             "num_attention_heads": config.get("num_attention_heads", "Unknown"),
-            "verification_status": self.metadata["verification_report"]
+            "verification_status": self.metadata["verification_report"],
+            "memory_profile": self.generate_memory_profile()
         }
         return info_summary
 

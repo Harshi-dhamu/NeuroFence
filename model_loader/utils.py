@@ -1,6 +1,6 @@
 """
 utils.py - Internal Utility Functions
-Helper methods dedicated to local file system validation and cryptographic checks.
+Helper methods dedicated to local file system validation, cryptographic checks, and memory profiling math.
 """
 
 import os
@@ -64,3 +64,25 @@ def load_json_config(file_path: str) -> Optional[Dict[str, Any]]:
             return json.load(f)
     except (json.JSONDecodeError, OSError, ValueError):
         return None
+
+def calculate_precision_footprint(param_count_billions: float, precision_bits: int) -> float:
+    """
+    Calculates the expected memory footprint in Gigabytes for a given parameter count and precision.
+    Includes a realistic 20% system overhead buffer factor.
+    
+    :param param_count_billions: Count of parameters expressed in Billions (e.g., 7.0 for 7B).
+    :param precision_bits: Quantization bit depth (32, 16, 8, 4).
+    :return: Estimated memory requirement in Gigabytes.
+    """
+    if param_count_billions <= 0:
+        return 0.0
+    
+    # Bytes per parameter mapping
+    bytes_per_param = precision_bits / 8.0
+    
+    # Pure weight size in GB: (Params * 10^9 * Bytes) / 10^9 => Params * Bytes
+    base_weight_gb = param_count_billions * bytes_per_param
+    
+    # Add a standard 20% runtime overhead for context windows, activations, and KV cache bounds
+    overhead_factor = 1.20
+    return round(base_weight_gb * overhead_factor, 2)
