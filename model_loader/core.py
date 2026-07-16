@@ -1,6 +1,7 @@
 """
 core.py - Core Model Loading and Verification Engine
-Responsible for safe interaction, structural validation, and memory analysis of local Hugging Face models.
+Responsible for safe interaction, structural validation, memory analysis, 
+and comprehensive summary generation of local Hugging Face models.
 """
 
 import os
@@ -14,7 +15,7 @@ from .sandbox import SandboxEnvironment, SandboxSecurityError
 class ModelLoader:
     """
     Handles the safe verification, metadata extraction, deep file auditing,
-    memory profiling, and isolated loading of local Hugging Face transformer models.
+    memory profiling, and unified summary generation of local Hugging Face models.
     """
     
     def __init__(self, model_path: str):
@@ -133,11 +134,7 @@ class ModelLoader:
         return "Unknown Architecture"
 
     def get_total_disk_size_bytes(self) -> int:
-        """
-        Calculates the aggregate on-disk storage size of all detected weight files.
-        
-        :return: Size in bytes.
-        """
+        """Calculates the aggregate on-disk storage size of all detected weight files."""
         total_bytes = 0
         safetensors_pool = self.metadata["detected_safetensors"]
         pytorch_pool = self.metadata["detected_pytorch_bin"]
@@ -150,21 +147,14 @@ class ModelLoader:
         return total_bytes
 
     def estimate_parameter_count(self) -> float:
-        """
-        Heuristically estimates the total model parameter count in billions based on config variables.
-        Formula mimics standard transformer layer dimensions if parameter metadata keys are absent.
-        
-        :return: Parameter count in Billions (e.g., 7.24).
-        """
+        """Heuristically estimates the total model parameter count in billions."""
         config = self.metadata.get("raw_config", {})
         if not config:
             return 0.0
 
-        # High precision architectures sometimes explicitly share this parameter
         if "num_parameters" in config:
             return round(float(config["num_parameters"]) / 1e9, 2)
 
-        # Heuristic fallback calculation based on standard transformer layer scaling logic
         hidden_size = config.get("hidden_size", 0)
         num_layers = config.get("num_hidden_layers", 0)
         vocab_size = config.get("vocab_size", 0)
@@ -173,7 +163,6 @@ class ModelLoader:
         if not (hidden_size and num_layers):
             return 0.0
 
-        # Estimate params: Embeddings + Attention Layers + MLP blocks
         embeddings = vocab_size * hidden_size
         attention_per_layer = 4 * (hidden_size ** 2)
         mlp_per_layer = 3 * hidden_size * intermediate_size
@@ -183,11 +172,7 @@ class ModelLoader:
         return round(calculated_total / 1e9, 2)
 
     def generate_memory_profile(self) -> Dict[str, Any]:
-        """
-        Builds a comprehensive memory matrix profiling estimation metrics across formats.
-        
-        :return: Memory profiling log dictionary.
-        """
+        """Builds a comprehensive memory matrix profiling estimation metrics."""
         param_count_b = self.estimate_parameter_count()
         disk_size_bytes = self.get_total_disk_size_bytes()
         
@@ -200,6 +185,41 @@ class ModelLoader:
                 "int8_quantized_gb": calculate_precision_footprint(param_count_b, 8),
                 "int4_quantized_gb": calculate_precision_footprint(param_count_b, 4)
             }
+        }
+
+    def generate_model_summary(self) -> Dict[str, Any]:
+        """Gathers structural metadata, validation vectors, and hardware footprints."""
+        self.extract_metadata()
+        config = self.metadata.get("raw_config", {})
+        tokenizer = self.metadata.get("raw_tokenizer_config", {})
+        mem_profile = self.generate_memory_profile()
+
+        return {
+            "model_identity": {
+                "name": self.model_name,
+                "local_path": self.model_path
+            },
+            "architecture_details": {
+                "architecture": self.detect_architecture(),
+                "layers_count": config.get("num_hidden_layers", "Unknown"),
+                "attention_heads": config.get("num_attention_heads", "Unknown"),
+                "hidden_size": config.get("hidden_size", "Unknown")
+            },
+            "tensor_properties": {
+                "framework": self.detect_framework(),
+                "parameter_count_b": mem_profile["estimated_parameters_billions"],
+                "disk_storage_gb": mem_profile["disk_size_gb"]
+            },
+            "tokenizer_properties": {
+                "has_tokenizer_config": bool(tokenizer),
+                "tokenizer_class": tokenizer.get("tokenizer_class", "Unknown Tokenizer"),
+                "vocabulary_size": config.get("vocab_size", "Unknown")
+            },
+            "security_status": {
+                "is_structurally_validated": self.is_validated,
+                "checks_passed": self.metadata["verification_report"]
+            },
+            "hardware_projections": mem_profile["estimated_runtime_ram_requirement"]
         }
 
     def extract_metadata(self) -> Dict[str, Any]:
@@ -217,25 +237,8 @@ class ModelLoader:
         return self.metadata
 
     def get_model_info(self) -> Dict[str, Any]:
-        """Compiles a summary dictionary describing properties, verifications, and memory footprint bounds."""
-        self.extract_metadata()
-        config = self.metadata.get("raw_config", {})
-        tokenizer = self.metadata.get("raw_tokenizer_config", {})
-
-        info_summary = {
-            "model_name": self.model_name,
-            "architecture": self.detect_architecture(),
-            "framework": self.detect_framework(),
-            "has_tokenizer": bool(tokenizer),
-            "tokenizer_class": tokenizer.get("tokenizer_class", "Unknown Tokenizer"),
-            "vocab_size": config.get("vocab_size", "Unknown"),
-            "hidden_size": config.get("hidden_size", "Unknown"),
-            "num_hidden_layers": config.get("num_hidden_layers", "Unknown"),
-            "num_attention_heads": config.get("num_attention_heads", "Unknown"),
-            "verification_status": self.metadata["verification_report"],
-            "memory_profile": self.generate_memory_profile()
-        }
-        return info_summary
+        """Backward compatible metadata summary fetcher pointing to the summary generator."""
+        return self.generate_model_summary()
 
     def _internal_weight_loader_payload(self) -> str:
         """Internal target payload simulation representing backend weight mounting."""
@@ -244,7 +247,7 @@ class ModelLoader:
         return "Success: Isolated payload model state loaded into sandbox memory space."
 
     def load_safely(self) -> Dict[str, Any]:
-        """Initializes the Model Sandbox environment and safely passes execution to the verified payload."""
+        """Initializes the Model Sandbox environment and safely passes execution."""
         response_summary = {"status": "Failed", "message": "", "error_details": None}
         
         if not self.is_validated and not self.validate_weights():
