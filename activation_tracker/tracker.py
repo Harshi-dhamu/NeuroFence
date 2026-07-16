@@ -8,7 +8,7 @@ from typing import Any, Dict
 
 from .hooks import HookManager
 from .analyzer import ActivationAnalyzer
-
+from .logger import ActivationLogger
 
 class ActivationTracker:
     """
@@ -51,3 +51,22 @@ class ActivationTracker:
         self.get_activations(),
         threshold,
     )
+
+    def export_statistics(self, output_file):
+        """ Export activation statistics to JSON."""
+
+        statistics = self.get_statistics()
+
+        ActivationLogger.export_statistics(
+            statistics,
+            output_file,
+        )
+
+
+    def export_numpy(self, output_directory):
+        """Export activation tensors as NumPy files."""
+
+        ActivationLogger.export_numpy(
+            self.get_activations(),
+            output_directory,
+        )

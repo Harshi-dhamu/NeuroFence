@@ -44,9 +44,12 @@ Implemented
 - Layer-wise activation storage
 - Activation statistics
 - Dormant neuron activity analysis
+- Activation logger
+- JSON export
+- NumPy export
 
 Upcoming
 
-- Activation logger
-- Visualization support
-- Layer comparison
+- Visualization data
+- Layer scoring
+- Activation comparison
