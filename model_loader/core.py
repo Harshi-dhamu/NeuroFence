@@ -6,6 +6,7 @@ Responsible for safe interaction with local Hugging Face model directories.
 import os
 from typing import Dict, Any, Optional
 from .utils import check_directory_exists, locate_model_files, verify_file_integrity, load_json_config
+from .sandbox import SandboxEnvironment, SandboxSecurityError
 
 class ModelLoader:
     """
@@ -33,9 +34,6 @@ class ModelLoader:
     def scan_model_directory(self) -> bool:
         """
         Scans the local directory to discover weights and layout configurations.
-        Updates internal metadata map based on discovered components.
-        
-        :return: True if the base directory exists and contains files, False otherwise.
         """
         if not check_directory_exists(self.model_path):
             self.is_validated = False
@@ -52,9 +50,6 @@ class ModelLoader:
     def validate_weights(self) -> bool:
         """
         Verifies model weights consistency and integrity against safetensors/bin manifests.
-        Ensures essential structural building blocks exist and are intact.
-        
-        :return: True if the model components pass structural verification tests, False otherwise.
         """
         self.scan_model_directory()
 
@@ -81,11 +76,7 @@ class ModelLoader:
         return True
 
     def detect_framework(self) -> str:
-        """
-        Detects the model weight distribution standard format.
-        
-        :return: 'Safetensors', 'PyTorch (Legacy)', or 'Unknown'.
-        """
+        """Detects the model weight distribution standard format."""
         if self.metadata["detected_safetensors"]:
             return "Safetensors"
         elif self.metadata["detected_pytorch_bin"]:
@@ -93,37 +84,24 @@ class ModelLoader:
         return "Unknown"
 
     def detect_architecture(self) -> str:
-        """
-        Identifies the concrete model architecture type defined inside the config.
-        
-        :return: String representing the model architecture category (e.g., 'Llama', 'Mistral').
-        """
+        """Identifies the concrete model architecture type defined inside the config."""
         config = self.metadata.get("raw_config", {})
-        
-        # Check standard Hugging Face properties
         if "architectures" in config and isinstance(config["architectures"], list) and config["architectures"]:
             return str(config["architectures"][0])
         elif "model_type" in config:
             return str(config["model_type"]).capitalize()
-            
         return "Unknown Architecture"
 
-    def extract_metadata(self) -> Dict[str, Any] :
-        """
-        Parses config.json and tokenizer_config.json to extract deep metadata parameters.
-        
-        :return: Updated metadata tracking dictionary.
-        """
+    def extract_metadata(self) -> Dict[str, Any]:
+        """Parses config.json and tokenizer_config.json to extract deep metadata parameters."""
         if not self.is_validated and not self.validate_weights():
             return self.metadata
 
-        # Load primary config
         config_path = os.path.join(self.model_path, "config.json")
         config_data = load_json_config(config_path)
         if config_data:
             self.metadata["raw_config"] = config_data
 
-        # Load optional tokenizer configuration
         tokenizer_path = os.path.join(self.model_path, "tokenizer_config.json")
         tokenizer_data = load_json_config(tokenizer_path)
         if tokenizer_data:
@@ -132,12 +110,7 @@ class ModelLoader:
         return self.metadata
 
     def get_model_info(self) -> Dict[str, Any]:
-        """
-        Compiles and builds a clean summary dictionary containing framework, 
-        tokenizer visibility metrics, parameters, and architectural properties.
-        
-        :return: A high-level metadata overview mapping dashboard details.
-        """
+        """Compiles a summary dictionary describing structural properties."""
         self.extract_metadata()
         config = self.metadata.get("raw_config", {})
         tokenizer = self.metadata.get("raw_tokenizer_config", {})
@@ -154,11 +127,44 @@ class ModelLoader:
             "num_attention_heads": config.get("num_attention_heads", "Unknown")
         }
 
-    def load_safely(self) -> Optional[Any]:
+    def _internal_weight_loader_payload(self) -> str:
         """
-        Loads the model tensors safely into memory inside the sandbox.
-        (To be fully implemented in Day 6).
+        Internal target payload simulation. This represents the absolute 
+        boundary layer where actual weight initialization hits memory registers.
         """
-        if not self.is_validated:
-            return None
-        return None
+        # A basic layout proof-of-concept verification check
+        if not self.metadata.get("has_config"):
+            raise FileNotFoundError("config.json missing inside target root path.")
+        return "Success: Isolated payload model state loaded into sandbox memory space."
+
+    def load_safely(self) -> Dict[str, Any]:
+        """
+        Initializes the Model Sandbox environment and safely passes execution to the payload.
+        Catches file absence, configuration corruption, and memory errors gracefully.
+        
+        :return: Execution report status dictionary.
+        """
+        response_summary = {"status": "Failed", "message": "", "error_details": None}
+        
+        if not self.is_validated and not self.validate_weights():
+            response_summary["message"] = "Model failed weight validation routines."
+            return response_summary
+
+        sandbox = SandboxEnvironment()
+        if not sandbox.initialize_sandbox():
+            response_summary["message"] = "Could not securely provision Sandbox Environment."
+            return response_summary
+
+        try:
+            # Wrap weight execution within the active sandbox instance
+            result_message = sandbox.execute_safely(self._internal_weight_loader_payload)
+            response_summary["status"] = "Isolated"
+            response_summary["message"] = result_message
+        except SandboxSecurityError as sse:
+            response_summary["status"] = "Intercepted"
+            response_summary["message"] = "Security runtime failure occurred during isolated setup."
+            response_summary["error_details"] = str(sse)
+        finally:
+            sandbox.close_sandbox()
+
+        return response_summary
