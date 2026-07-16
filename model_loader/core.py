@@ -26,7 +26,8 @@ class ModelLoader:
             "detected_safetensors": [],
             "detected_pytorch_bin": [],
             "has_config": False,
-            "raw_config": {}
+            "raw_config": {},
+            "raw_tokenizer_config": {}
         }
 
     def scan_model_directory(self) -> bool:
@@ -79,22 +80,79 @@ class ModelLoader:
         self.is_validated = True
         return True
 
-    def extract_metadata(self) -> Dict[str, Any]:
+    def detect_framework(self) -> str:
         """
-        Parses config.json to extract basic model architecture details.
+        Detects the model weight distribution standard format.
+        
+        :return: 'Safetensors', 'PyTorch (Legacy)', or 'Unknown'.
+        """
+        if self.metadata["detected_safetensors"]:
+            return "Safetensors"
+        elif self.metadata["detected_pytorch_bin"]:
+            return "PyTorch (Legacy)"
+        return "Unknown"
+
+    def detect_architecture(self) -> str:
+        """
+        Identifies the concrete model architecture type defined inside the config.
+        
+        :return: String representing the model architecture category (e.g., 'Llama', 'Mistral').
+        """
+        config = self.metadata.get("raw_config", {})
+        
+        # Check standard Hugging Face properties
+        if "architectures" in config and isinstance(config["architectures"], list) and config["architectures"]:
+            return str(config["architectures"][0])
+        elif "model_type" in config:
+            return str(config["model_type"]).capitalize()
+            
+        return "Unknown Architecture"
+
+    def extract_metadata(self) -> Dict[str, Any] :
+        """
+        Parses config.json and tokenizer_config.json to extract deep metadata parameters.
         
         :return: Updated metadata tracking dictionary.
         """
         if not self.is_validated and not self.validate_weights():
             return self.metadata
 
+        # Load primary config
         config_path = os.path.join(self.model_path, "config.json")
         config_data = load_json_config(config_path)
-        
         if config_data:
             self.metadata["raw_config"] = config_data
-            
+
+        # Load optional tokenizer configuration
+        tokenizer_path = os.path.join(self.model_path, "tokenizer_config.json")
+        tokenizer_data = load_json_config(tokenizer_path)
+        if tokenizer_data:
+            self.metadata["raw_tokenizer_config"] = tokenizer_data
+
         return self.metadata
+
+    def get_model_info(self) -> Dict[str, Any]:
+        """
+        Compiles and builds a clean summary dictionary containing framework, 
+        tokenizer visibility metrics, parameters, and architectural properties.
+        
+        :return: A high-level metadata overview mapping dashboard details.
+        """
+        self.extract_metadata()
+        config = self.metadata.get("raw_config", {})
+        tokenizer = self.metadata.get("raw_tokenizer_config", {})
+
+        return {
+            "model_name": self.model_name,
+            "architecture": self.detect_architecture(),
+            "framework": self.detect_framework(),
+            "has_tokenizer": bool(tokenizer),
+            "tokenizer_class": tokenizer.get("tokenizer_class", "Unknown Tokenizer"),
+            "vocab_size": config.get("vocab_size", "Unknown"),
+            "hidden_size": config.get("hidden_size", "Unknown"),
+            "num_hidden_layers": config.get("num_hidden_layers", "Unknown"),
+            "num_attention_heads": config.get("num_attention_heads", "Unknown")
+        }
 
     def load_safely(self) -> Optional[Any]:
         """
