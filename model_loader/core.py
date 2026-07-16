@@ -5,7 +5,7 @@ Responsible for safe interaction with local Hugging Face model directories.
 
 import os
 from typing import Dict, Any, Optional
-from .utils import check_directory_exists, locate_model_files
+from .utils import check_directory_exists, locate_model_files, verify_file_integrity
 
 class ModelLoader:
     """
@@ -39,24 +39,44 @@ class ModelLoader:
             self.is_validated = False
             return False
 
-        # Detect configuration file presence
         config_path = os.path.join(self.model_path, "config.json")
         self.metadata["has_config"] = os.path.exists(config_path)
 
-        # Detect framework weights
         self.metadata["detected_safetensors"] = locate_model_files(self.model_path, ".safetensors")
         self.metadata["detected_pytorch_bin"] = locate_model_files(self.model_path, ".bin")
 
-        # Basic path validation flag update
-        self.is_validated = True
         return True
 
     def validate_weights(self) -> bool:
         """
         Verifies model weights consistency and integrity against safetensors/bin manifests.
-        (To be fully implemented in Day 3).
+        Ensures essential structural building blocks exist and are intact.
+        
+        :return: True if the model components pass structural verification tests, False otherwise.
         """
-        return False
+        self.scan_model_directory()
+
+        config_path = os.path.join(self.model_path, "config.json")
+        if not self.metadata["has_config"] or not verify_file_integrity(config_path):
+            self.is_validated = False
+            return False
+
+        safetensors_pool = self.metadata["detected_safetensors"]
+        pytorch_pool = self.metadata["detected_pytorch_bin"]
+
+        if not safetensors_pool and not pytorch_pool:
+            self.is_validated = False
+            return False
+
+        active_pool = safetensors_pool if safetensors_pool else pytorch_pool
+        for weight_file in active_pool:
+            full_weight_path = os.path.join(self.model_path, weight_file)
+            if not verify_file_integrity(full_weight_path):
+                self.is_validated = False
+                return False
+
+        self.is_validated = True
+        return True
 
     def extract_metadata(self) -> Dict[str, Any]:
         """

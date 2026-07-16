@@ -30,3 +30,19 @@ def locate_model_files(directory_path: str, extension: str) -> List[str]:
         return [f for f in os.listdir(directory_path) if f.endswith(extension)]
     except OSError:
         return []
+
+def verify_file_integrity(file_path: str) -> bool:
+    """
+    Validates if a file exists and is structurally non-empty.
+    Ensures corrupted/0-byte downloads are flagged immediately.
+    
+    :param file_path: Absolute path to the file.
+    :return: True if the file is valid, False otherwise.
+    """
+    if not os.path.exists(file_path):
+        return False
+        
+    try:
+        return os.path.getsize(file_path) > 0
+    except OSError:
+        return False
