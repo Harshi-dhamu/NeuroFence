@@ -1,10 +1,8 @@
-"""Responsive Day 6 dashboard controller for the NeuroFence desktop UI."""
+"""Day 8 NeuroFence window: presentation layer for controller-driven scans."""
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
-from time import perf_counter
 
 from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, Qt
 from PyQt6.QtWidgets import (
@@ -24,6 +22,9 @@ from PyQt6.QtWidgets import (
 )
 
 from desktop_ui.components.circular_gauge import CircularGauge
+from desktop_ui.controllers.integration import IntegrationBridge, ScanResult
+from desktop_ui.controllers.scan_controller import ScanController
+from desktop_ui.controllers.ui_controller import UIController
 from desktop_ui.components.recent_scan_panel import RecentScanPanel
 from desktop_ui.components.system_info import SystemInfo
 from desktop_ui.components.system_status_card import SystemStatusCard
@@ -51,18 +52,15 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(820, 620)
 
         self._compact_mode: bool | None = None
-        self._scan_step_index = 0
-        self._scan_started_at = 0.0
-        self._scan_steps: list[dict[str, object]] = []
         self.last_threat_score = 0
         self.last_scan_result = "READY"
-
-        self.scan_timer = QTimer(self)
-        self.scan_timer.setInterval(650)
-        self.scan_timer.timeout.connect(self._run_next_scan_step)
+        self.latest_scan_result: ScanResult | None = None
 
         self.setup_ui()
         self.setup_menu()
+        self.integration = IntegrationBridge()
+        self.scan_controller = ScanController(self.integration, self)
+        self.ui_controller = UIController(self)
         self.connect_signals()
         self.update_dashboard("Protected")
         self.statusBar().showMessage("Ready | NeuroFence scanner protected")
@@ -235,6 +233,11 @@ class MainWindow(QMainWindow):
         self.history_page.filter_requested.connect(self.filter_history)
         self.history_page.search_requested.connect(self.search_history)
 
+        self.scan_controller.scan_started.connect(self.ui_controller.prepare_scan)
+        self.scan_controller.stage_changed.connect(self.ui_controller.update_stage)
+        self.scan_controller.scan_completed.connect(self._handle_scan_completed)
+        self.scan_controller.scan_failed.connect(self._handle_scan_error)
+
     def navigate_to(self, page_name: str) -> None:
         """Open a sidebar page while preserving the dashboard state."""
         if page_name == "help":
@@ -316,74 +319,33 @@ class MainWindow(QMainWindow):
                 self.stats_layout.setColumnStretch(column, 1)
 
     # ------------------------------------------------------------------
-    # Day 6 backend integration boundaries
+    # Day 8 controller and integration boundaries
     # ------------------------------------------------------------------
 
     def load_model(self) -> None:
-        """Prepare selected model metadata for the dashboard.
+        """Reflect the model selected by UploadCard in the dashboard.
 
-        Future integration point: connect Tanvi's Model Loader & Sandbox here.
-        The UploadCard opens the folder dialog before this slot is called.
+        Actual metadata loading is delegated to ModelService when a scan starts.
         """
         model_path = self.upload_card.model_path
         if not model_path:
             return
         model_name = Path(model_path).name or model_path
         self._set_info_card_value(self.card_models, "1")
-        self.activity.add_activity(f"Model loaded: {model_name}")
-        self.logs_widget.add_log(f"Model selected: {model_name}", "INFO")
+        self.activity.add_activity(f"Model selected: {model_name}")
+        self.logs_widget.add_log(f"Model selected and ready: {model_name}", "INFO")
         self.statusBar().showMessage(f"Model ready: {model_name}")
         self.update_statistics(models_loaded=1)
 
     def run_scan(self) -> None:
-        """Run the current simulation without blocking the UI.
-
-        Future integration points:
-        - Tanvi: load and sandbox the selected model.
-        - Akhina: track model activations and dormant neurons.
-        - Dhruti: run detection, fuzzing and threat-score calculation.
-        """
-        if self.scan_timer.isActive():
+        """Delegate the full scan workflow to ScanController."""
+        if self.scan_controller.is_running:
+            self.logs_widget.add_log("A scan is already in progress", "WARNING")
             return
-
-        model_name = self._current_model_name()
-        if not self.upload_card.model_path:
-            self.logs_widget.add_log("No model selected; using demonstration data", "WARNING")
-
-        self.logs_widget.clear_logs()
-        self.activity.list.clear()
-        self.progress_card.progress.setValue(0)
-        if hasattr(self.progress_card, "set_stage"):
-            self.progress_card.set_stage("Ready to scan")
-        self.gauge.setValue(0)
-        self.scan_card.status.setText("●  Scan in progress")
-        self.scan_card.scan_button.setEnabled(False)
-        self.recent_scan_panel.set_result("SCANNING")
-        self.system_status_card.set_scanner_status("Scanning", "scanning")
-        self.update_dashboard("Scanning")
-        self.update_statistics(threat_score=0, status="Scanning")
-        self._scan_started_at = perf_counter()
-
-        self._scan_steps = [
-            {"progress": 8, "threat": 2, "activity": "Initialize scanner", "message": "Initializing scanner"},
-            {"progress": 18, "threat": 4, "activity": "Load model metadata", "message": f"Loading model metadata for {model_name}"},
-            {"progress": 30, "threat": 6, "activity": "Verify model structure", "message": "Verifying model architecture and files"},
-            {"progress": 45, "threat": 10, "activity": "Analyze weight tensors", "message": "Analyzing model weight tensors"},
-            {"progress": 58, "threat": 14, "activity": "Search dormant neurons", "message": "Searching for dormant neuron patterns"},
-            {"progress": 72, "threat": 20, "activity": "Execute adversarial prompts", "message": "Executing adversarial prompt tests"},
-            {"progress": 84, "threat": 18, "activity": "Calculate threat score", "message": "Calculating overall threat score"},
-            {"progress": 94, "threat": 18, "activity": "Generate summary", "message": "Generating scan summary"},
-            {"progress": 100, "threat": 18, "activity": "Complete scan", "message": "Scan workflow completed", "level": "SUCCESS"},
-        ]
-        self._scan_step_index = 0
-        self.scan_timer.start()
+        self.scan_controller.start_scan(self.upload_card.model_path)
 
     def update_dashboard(self, status: str = "Protected") -> None:
-        """Update high-level dashboard state.
-
-        Future backend event handlers can call this method after receiving a
-        loader, activation-tracker or detection result.
-        """
+        """Update high-level dashboard state from controller events."""
         self.top_bar.set_system_status(status)
         self.card_status_value(status)
 
@@ -394,7 +356,7 @@ class MainWindow(QMainWindow):
         threat_score: int | None = None,
         status: str | None = None,
     ) -> None:
-        """Central place for backend modules to publish dashboard statistics."""
+        """Central publication point for normalized backend statistics."""
         if models_loaded is not None:
             self._set_info_card_value(self.card_models, str(models_loaded))
         if threat_score is not None:
@@ -403,110 +365,77 @@ class MainWindow(QMainWindow):
             self._set_info_card_value(self.card_status, status)
 
     def display_report(self) -> None:
-        """Display the report page; backend PDF/details will connect here later."""
         self.navigate_to("reports")
 
     def load_scan_history(self) -> None:
-        """Placeholder: load persisted scan records from the future storage backend."""
+        """TODO: load persisted scan records from the future storage backend."""
         self.logs_widget.add_log("Scan history interface refreshed", "INFO")
 
     def generate_report(self) -> None:
-        """Placeholder: connect generated findings from the detection backend here."""
+        """TODO: connect persisted report generation/export workflow here."""
         self.navigate_to("reports")
 
     def refresh_statistics(self) -> None:
-        """Placeholder: refresh aggregate report metrics from stored scan results."""
+        """TODO: calculate aggregates from persisted results later."""
         self.reports_page.threat_statistics.set_statistics(critical=0, medium=2, low=5, safe=17)
 
     def export_report(self) -> None:
-        """Placeholder: export reports/history to PDF or CSV in a future sprint."""
-        QMessageBox.information(self, "Export Prepared", "Export workflow is ready for backend implementation.")
+        """TODO: call IntegrationBridge.export_results and a file writer later."""
+        if self.latest_scan_result is None:
+            QMessageBox.information(self, "Nothing to Export", "Run a scan before exporting a report.")
+            return
+        QMessageBox.information(
+            self,
+            "Export Prepared",
+            "The normalized scan result is ready for PDF, JSON or CSV export integration.",
+        )
 
     def search_history(self, query: str = "") -> None:
-        """Search hook; the current table performs local filtering immediately."""
+        """Search hook; HistoryTable currently performs local filtering."""
         self.statusBar().showMessage(f"History search: {query or 'all records'}")
 
     def filter_history(self) -> None:
-        """Placeholder: advanced date/result filters will be connected later."""
+        """TODO: connect date, score and result filters to persistence later."""
         QMessageBox.information(self, "History Filters", "Advanced history filters will be connected here.")
 
-    # Keep the older method name compatible with Day 5 code.
     def start_scan(self) -> None:
+        """Backward-compatible alias retained for older UI code."""
         self.run_scan()
 
     # ------------------------------------------------------------------
-    # Scan simulation helpers
+    # Controller event handlers
     # ------------------------------------------------------------------
 
-    def _run_next_scan_step(self) -> None:
-        if self._scan_step_index >= len(self._scan_steps):
-            self.scan_timer.stop()
-            self._finish_scan()
-            return
+    def _handle_scan_completed(self, result: ScanResult) -> None:
+        self.latest_scan_result = result
+        self.last_threat_score = result.threat_score
+        self.last_scan_result = result.overall_status
+        self.ui_controller.display_result(result)
 
-        step = self._scan_steps[self._scan_step_index]
-        progress = int(step["progress"])
-        threat = int(step["threat"])
-        activity_text = str(step["activity"])
-        message = str(step["message"])
-        level = str(step.get("level", "INFO"))
-
-        self.progress_card.progress.setValue(progress)
-        if hasattr(self.progress_card, "set_stage"):
-            self.progress_card.set_stage(activity_text)
-        self.gauge.setValue(threat)
-        self.activity.add_activity(activity_text)
-        self.logs_widget.add_log(message, level)
-        self.statusBar().showMessage(f"{progress}% | {activity_text}")
-        self.update_statistics(threat_score=threat, status="Scanning")
-        self._scan_step_index += 1
-
-    def _finish_scan(self) -> None:
-        duration = max(0.1, perf_counter() - self._scan_started_at)
-        threat_score = 18
-        result = "SAFE"
-        model_name = self._current_model_name()
-
-        self.logs_widget.add_log("No suspicious weights detected", "SUCCESS")
-        self.logs_widget.add_log("No dormant backdoor trigger found", "SAFE")
-        self.logs_widget.add_log("Scan completed successfully", "SAFE")
-        self.activity.add_activity("Scan completed successfully")
-
-        self.progress_card.progress.setValue(100)
-        if hasattr(self.progress_card, "set_stage"):
-            self.progress_card.set_stage("Scan completed — model classified SAFE")
-        self.gauge.setValue(threat_score)
-        self.scan_card.status.setText("●  Protected — no active threat")
-        self.scan_card.scan_button.setEnabled(True)
-        self.system_status_card.set_scanner_status("Protected", "normal")
-        self.recent_scan_panel.update_scan(
-            scan_time=datetime.now().strftime("%d %b %Y, %I:%M %p"),
-            model_name=model_name,
-            threat_score=threat_score,
-            duration_seconds=duration,
-            result=result,
-        )
-
-        recommendation = "No suspicious behaviour detected. Continue routine monitoring."
-        scan_time = datetime.now().strftime("%d %b %Y, %I:%M %p")
         self.reports_page.update_latest_report(
-            model_name, result, threat_score, duration, scan_time, recommendation
+            result.model_name,
+            result.overall_status,
+            result.threat_score,
+            result.scan_duration,
+            result.timestamp,
+            result.recommendation,
         )
         self.history_page.history_table.add_scan(
             f"NF-{self.history_page.history_table.rowCount() + 20:04d}",
-            model_name, scan_time, f"{threat_score}%", result
+            result.model_name,
+            result.timestamp,
+            f"{result.threat_score}%",
+            result.overall_status,
         )
         self.refresh_statistics()
 
-        self.last_threat_score = threat_score
-        self.last_scan_result = result
-        self.update_dashboard("Protected")
-        self.update_statistics(
-            models_loaded=1 if self.upload_card.model_path else 0,
-            threat_score=threat_score,
-            status="Protected",
+    def _handle_scan_error(self, module: str, message: str) -> None:
+        self.ui_controller.display_error(module, message)
+        QMessageBox.warning(
+            self,
+            f"{module} Error",
+            f"The scan could not continue.\n\n{message}\n\nCheck the selected model and try again.",
         )
-        self.statusBar().showMessage(f"Scan complete | {result} | Threat score {threat_score}%")
 
     # ------------------------------------------------------------------
     # Shared helpers and window actions
@@ -530,8 +459,8 @@ class MainWindow(QMainWindow):
         return Path(self.upload_card.model_path).name or "Selected Model"
 
     def reset_dashboard(self) -> None:
-        self.scan_timer.stop()
-        self._scan_step_index = 0
+        self.scan_controller.cancel_scan()
+        self.latest_scan_result = None
         self.scan_card.scan_button.setEnabled(True)
         self.scan_card.status.setText("●  Ready for analysis")
         self.progress_card.progress.setValue(0)
