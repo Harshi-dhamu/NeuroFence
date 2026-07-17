@@ -68,3 +68,54 @@ class ActivationAnalyzer:
             }
 
         return results
+    
+
+    @staticmethod
+    def prepare_layer_summary(activations):
+        """Prepare summary information for each tracked layer."""
+
+        summary = {}
+
+        for layer_name, info in activations.items():
+
+            tensor = info["activation"]
+
+            summary[layer_name] = {
+                "layer_type": info["layer_type"],
+                "shape": list(tensor.shape),
+                "num_neurons": tensor.numel(),
+            }
+
+        return summary
+    @staticmethod
+    def prepare_neuron_data(activations):
+        """Convert activations into Python lists for visualization."""
+
+        neuron_data = {}
+
+        for layer_name, info in activations.items():
+
+            neuron_data[layer_name] = (
+                info["activation"]
+                .flatten()
+                .tolist()
+            )
+
+        return neuron_data
+    
+
+    @staticmethod
+    def prepare_heatmap_data(activations):
+        """Prepare activation matrices for heatmap visualization."""
+
+        heatmaps = {}
+
+        for layer_name, info in activations.items():
+
+            heatmaps[layer_name] = (
+                info["activation"]
+                .numpy()
+                .tolist()
+            )
+
+        return heatmaps

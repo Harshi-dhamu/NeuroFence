@@ -70,3 +70,29 @@ class ActivationTracker:
             self.get_activations(),
             output_directory,
         )
+    def get_layer_summary(self):
+        """
+        Return layer summary information.
+        """
+
+        return ActivationAnalyzer.prepare_layer_summary(
+            self.get_activations()
+        )
+    
+    def get_neuron_data(self):
+        """
+        Return neuron activation values.
+        """
+
+        return ActivationAnalyzer.prepare_neuron_data(
+            self.get_activations()
+        )
+    
+    def get_heatmap_data(self):
+        """
+        Return heatmap-ready activation data.
+        """
+
+        return ActivationAnalyzer.prepare_heatmap_data(
+            self.get_activations()
+        )

@@ -47,9 +47,10 @@ Implemented
 - Activation logger
 - JSON export
 - NumPy export
+- Visualization data preparation
 
 Upcoming
 
-- Visualization data
-- Layer scoring
+- Layer metrics
 - Activation comparison
+- Performance optimization
