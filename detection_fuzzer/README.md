@@ -62,3 +62,11 @@ This module is responsible for:
 - Added suspicious output detection
 - Implemented regex-based pattern matching
 - Successfully tested detection rules
+## Day 9 Progress
+
+- Created scoring.py
+- Implemented Threat Score calculation
+- Added Severity calculation
+- Added Confidence calculation
+- Added Risk Level calculation
+- Successfully tested scoring engine
