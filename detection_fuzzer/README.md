@@ -55,3 +55,10 @@ This module is responsible for:
 - Added suspicious output detection
 - Implemented basic pattern matching
 - Successfully tested detection rules
+## Day 8 Progress
+
+- Created detector.py
+- Added keyword detection
+- Added suspicious output detection
+- Implemented regex-based pattern matching
+- Successfully tested detection rules
