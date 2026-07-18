@@ -1,10 +1,11 @@
 """
 core.py - Core Model Loading and Verification Engine
 Responsible for safe interaction, structural validation, memory analysis, 
-and comprehensive summary generation of local Hugging Face models.
+comprehensive summary generation, and system logging of local Hugging Face models.
 """
 
 import os
+import logging
 from typing import Dict, Any, Optional
 from .utils import (
     check_directory_exists, locate_model_files, verify_file_integrity, 
@@ -12,10 +13,23 @@ from .utils import (
 )
 from .sandbox import SandboxEnvironment, SandboxSecurityError
 
+# --- DAY 10 LOGGING SETUP ---
+logger = logging.getLogger("NeuroFence.ModelLoader")
+logger.setLevel(logging.INFO)
+
+# Prevent duplicate handlers if the module is re-imported
+if not logger.handlers:
+    log_file_path = os.path.abspath("loader.log")
+    file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+    formatter = logging.Formatter('[%(asctime)s] [%(levelname)s] (Loader): %(message)s')
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+# -----------------------------
+
 class ModelLoader:
     """
     Handles the safe verification, metadata extraction, deep file auditing,
-    memory profiling, and unified summary generation of local Hugging Face models.
+    memory profiling, logging, and unified summary generation of local Hugging Face models.
     """
     
     def __init__(self, model_path: str):
@@ -39,10 +53,13 @@ class ModelLoader:
                 "weights_verified": False
             }
         }
+        logger.info(f"Initialized ModelLoader for target path: {self.model_path}")
 
     def scan_model_directory(self) -> bool:
         """Scans the local directory to discover weights and layout configurations."""
+        logger.info(f"Scanning directory footprint for model: {self.model_name}")
         if not check_directory_exists(self.model_path):
+            logger.error(f"Scan failed: Target directory does not exist -> {self.model_path}")
             self.is_validated = False
             return False
 
@@ -52,17 +69,25 @@ class ModelLoader:
         self.metadata["detected_safetensors"] = locate_model_files(self.model_path, ".safetensors")
         self.metadata["detected_pytorch_bin"] = locate_model_files(self.model_path, ".bin")
 
+        logger.info(f"Scan completed. Found Safetensors: {len(self.metadata['detected_safetensors'])}, PyTorch Binaries: {len(self.metadata['detected_pytorch_bin'])}")
         return True
 
     def verify_config_keys(self) -> bool:
         """Deep-audits config.json to ensure critical LLM hyperparameter definitions exist."""
         config = self.metadata.get("raw_config", {})
         if not config:
+            logger.warning("Config verification aborted: No loaded configuration content found.")
             return False
 
         critical_keys = ["model_type", "vocab_size", "hidden_size", "num_hidden_layers"]
         has_keys = all(key in config for key in critical_keys)
         
+        if not has_keys:
+            missing = [k for k in critical_keys if k not in config]
+            logger.warning(f"Config validation failed. Missing structural parameters: {missing}")
+        else:
+            logger.info("Config structural parameters verified successfully.")
+
         self.metadata["verification_report"]["config_verified"] = has_keys
         return has_keys
 
@@ -76,6 +101,11 @@ class ModelLoader:
         has_vocab = verify_file_integrity(tokenizer_model_path) or verify_file_integrity(legacy_vocab_path)
 
         is_tokenizer_valid = has_config and has_vocab
+        if not is_tokenizer_valid:
+            logger.warning(f"Tokenizer check failed. Config available: {has_config}, Vocab/Matrix available: {has_vocab}")
+        else:
+            logger.info("Tokenizer layout validation successful.")
+
         self.metadata["verification_report"]["tokenizer_verified"] = is_tokenizer_valid
         return is_tokenizer_valid
 
@@ -86,24 +116,29 @@ class ModelLoader:
 
         active_pool = safetensors_pool if safetensors_pool else pytorch_pool
         if not active_pool:
+            logger.error("Weight layout validation failed: No tensor files found.")
             return False
 
         for weight_file in active_pool:
             full_weight_path = os.path.join(self.model_path, weight_file)
             if not verify_file_integrity(full_weight_path):
+                logger.error(f"Weight file integrity compromised: {weight_file}")
                 return False
 
+        logger.info(f"Weight validation cleared for {len(active_pool)} binary components.")
         self.metadata["verification_report"]["weights_verified"] = True
         return True
 
     def validate_weights(self) -> bool:
         """Executes the full, strict multi-stage verification pipeline."""
+        logger.info("Starting strict multi-stage structural validation pipeline.")
         if not self.scan_model_directory():
             self.is_validated = False
             return False
 
         config_path = os.path.join(self.model_path, "config.json")
         if not self.metadata["has_config"] or not verify_file_integrity(config_path):
+            logger.error("Validation pipeline aborted: Core config.json missing or empty.")
             self.is_validated = False
             return False
 
@@ -114,6 +149,10 @@ class ModelLoader:
         weights_ok = self.verify_weight_layout()
 
         self.is_validated = bool(config_ok and tokenizer_ok and weights_ok)
+        if self.is_validated:
+            logger.info(f"Model '{self.model_name}' cleared validation successfully.")
+        else:
+            logger.error(f"Model '{self.model_name}' failed security and structural verification checks.")
         return self.is_validated
 
     def detect_framework(self) -> str:
@@ -248,26 +287,34 @@ class ModelLoader:
 
     def load_safely(self) -> Dict[str, Any]:
         """Initializes the Model Sandbox environment and safely passes execution."""
+        logger.info(f"Attempting secure runtime staging execution for model: {self.model_name}")
         response_summary = {"status": "Failed", "message": "", "error_details": None}
         
         if not self.is_validated and not self.validate_weights():
             response_summary["message"] = "Model failed strict structural verification checks."
+            logger.error("Execution terminated: Model verification sequence failed.")
             return response_summary
 
         sandbox = SandboxEnvironment()
+        logger.info("Initializing security sandbox context layer.")
         if not sandbox.initialize_sandbox():
             response_summary["message"] = "Could not securely provision Sandbox Environment."
+            logger.critical("Critical error: Sandbox execution space configuration failed.")
             return response_summary
 
         try:
+            logger.info("Routing logic execution tracking directly into isolated sandbox.")
             result_message = sandbox.execute_safely(self._internal_weight_loader_payload)
             response_summary["status"] = "Isolated"
             response_summary["message"] = result_message
+            logger.info("Staged model payload successfully mounted into sandbox memory.")
         except SandboxSecurityError as sse:
             response_summary["status"] = "Intercepted"
             response_summary["message"] = "Security runtime failure occurred during isolated setup."
             response_summary["error_details"] = str(sse)
+            logger.critical(f"Security runtime interception triggered! Details: {str(sse)}")
         finally:
+            logger.info("Tearing down active sandbox instances.")
             sandbox.close_sandbox()
 
         return response_summary
