@@ -70,3 +70,10 @@ This module is responsible for:
 - Added Confidence calculation
 - Added Risk Level calculation
 - Successfully tested scoring engine
+## Day 10 Progress
+
+- Created formatter.py
+- Added Dictionary formatter
+- Added JSON formatter
+- Added CSV formatter
+- Successfully generated scan_result.csv
