@@ -96,3 +96,11 @@ class ActivationTracker:
         return ActivationAnalyzer.prepare_heatmap_data(
             self.get_activations()
         )
+    
+    def get_layer_scores(self, threshold=1e-5):
+        """Return activity scores for every tracked layer."""
+
+        return ActivationAnalyzer.compute_layer_scores(
+            self.get_activations(),
+            threshold,
+    )

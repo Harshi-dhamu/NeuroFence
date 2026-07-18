@@ -119,3 +119,41 @@ class ActivationAnalyzer:
             )
 
         return heatmaps
+    
+    @staticmethod
+    def compute_layer_scores(
+        activations,
+        threshold: float = 1e-5,
+    ):
+        """Compute activity-related scores for each tracked layer."""
+
+        layer_scores = {}
+
+        for layer_name, info in activations.items():
+
+            tensor = info["activation"]
+
+            total = tensor.numel()
+
+            active = int((torch.abs(tensor) > threshold).sum().item())
+
+            dormant = total - active
+
+            activity_score = active / total
+
+            dormant_score = dormant / total
+
+            activation_spread = float(
+                torch.max(tensor) - torch.min(tensor)
+            )
+
+            layer_scores[layer_name] = {
+                "layer_type": info["layer_type"],
+                "activity_score": activity_score,
+                "dormant_score": dormant_score,
+                "activation_spread": activation_spread,
+                "active_neurons": active,
+                "dormant_neurons": dormant,
+            }
+
+        return layer_scores

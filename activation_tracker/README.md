@@ -48,9 +48,10 @@ Implemented
 - JSON export
 - NumPy export
 - Visualization data preparation
+- Layer activity scoring
 
 Upcoming
 
-- Layer metrics
 - Activation comparison
 - Performance optimization
+- Public API
