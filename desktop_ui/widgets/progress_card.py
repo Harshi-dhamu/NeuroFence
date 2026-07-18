@@ -39,3 +39,12 @@ class ProgressCard(QWidget):
 
     def set_stage(self, text: str) -> None:
         self.stage_label.setText(text)
+
+    def update_progress(self, percentage: int, status: str | None = None) -> None:
+        """Update progress and optional stage through a stable public API."""
+        self.progress.setValue(max(0, min(100, int(percentage))))
+        if status is not None:
+            self.set_stage(status)
+
+    def reset_progress(self) -> None:
+        self.update_progress(0, "Ready to scan")

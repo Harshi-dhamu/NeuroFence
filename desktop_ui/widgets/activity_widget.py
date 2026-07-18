@@ -30,3 +30,9 @@ class ActivityWidget(QWidget):
         item = QListWidgetItem(f"{datetime.now().strftime('%H:%M:%S')}   {text}")
         self.list.addItem(item)
         self.list.scrollToBottom()
+
+    def append_entry(self, text: str) -> None:
+        self.add_activity(text)
+
+    def clear_entries(self) -> None:
+        self.list.clear()

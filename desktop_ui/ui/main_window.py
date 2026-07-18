@@ -1,4 +1,4 @@
-"""Day 8 NeuroFence window: presentation layer for controller-driven scans."""
+"""Day 9 NeuroFence window: data-driven presentation and navigation layer."""
 
 from __future__ import annotations
 
@@ -22,9 +22,10 @@ from PyQt6.QtWidgets import (
 )
 
 from desktop_ui.components.circular_gauge import CircularGauge
-from desktop_ui.controllers.integration import IntegrationBridge, ScanResult
+from desktop_ui.controllers.dashboard_controller import DashboardController
 from desktop_ui.controllers.scan_controller import ScanController
-from desktop_ui.controllers.ui_controller import UIController
+from desktop_ui.models.scan_result import ScanResult
+from desktop_ui.services.dummy_data_service import DummyDataService
 from desktop_ui.components.recent_scan_panel import RecentScanPanel
 from desktop_ui.components.system_info import SystemInfo
 from desktop_ui.components.system_status_card import SystemStatusCard
@@ -58,9 +59,9 @@ class MainWindow(QMainWindow):
 
         self.setup_ui()
         self.setup_menu()
-        self.integration = IntegrationBridge()
-        self.scan_controller = ScanController(self.integration, self)
-        self.ui_controller = UIController(self)
+        self.data_service = DummyDataService()
+        self.scan_controller = ScanController(self.data_service, self)
+        self.dashboard_controller = DashboardController(self, self.data_service)
         self.connect_signals()
         self.update_dashboard("Protected")
         self.statusBar().showMessage("Ready | NeuroFence scanner protected")
@@ -126,13 +127,14 @@ class MainWindow(QMainWindow):
         self.stats_container = QWidget()
         self.stats_layout = QGridLayout(self.stats_container)
         self.stats_layout.setContentsMargins(0, 0, 0, 0)
-        self.stats_layout.setHorizontalSpacing(24)
-        self.stats_layout.setVerticalSpacing(24)
+        self.stats_layout.setHorizontalSpacing(20)
+        self.stats_layout.setVerticalSpacing(20)
 
-        self.card_models = InfoCard("Models Loaded", "0", "Models prepared for inspection")
-        self.card_threat = InfoCard("Threat Score", "0%", "Current model risk level")
-        self.card_status = InfoCard("System Status", "Protected", "Scanner protection state")
-        self.stat_cards = [self.card_models, self.card_threat, self.card_status]
+        self.card_models = InfoCard("Models Loaded", "0", "No model selected")
+        self.card_threat = InfoCard("Threat Score", "0%", "Awaiting scan result")
+        self.card_duration = InfoCard("Scan Duration", "—", "No completed scan")
+        self.card_risk = InfoCard("Risk Level", "Ready", "Scanner standing by")
+        self.stat_cards = [self.card_models, self.card_threat, self.card_duration, self.card_risk]
 
         for card in self.stat_cards:
             card.setObjectName("card")
@@ -233,8 +235,8 @@ class MainWindow(QMainWindow):
         self.history_page.filter_requested.connect(self.filter_history)
         self.history_page.search_requested.connect(self.search_history)
 
-        self.scan_controller.scan_started.connect(self.ui_controller.prepare_scan)
-        self.scan_controller.stage_changed.connect(self.ui_controller.update_stage)
+        self.scan_controller.scan_started.connect(self.dashboard_controller.prepare_scan)
+        self.scan_controller.stage_changed.connect(self.dashboard_controller.update_stage)
         self.scan_controller.scan_completed.connect(self._handle_scan_completed)
         self.scan_controller.scan_failed.connect(self._handle_scan_error)
 
@@ -319,23 +321,14 @@ class MainWindow(QMainWindow):
                 self.stats_layout.setColumnStretch(column, 1)
 
     # ------------------------------------------------------------------
-    # Day 8 controller and integration boundaries
+    # Day 9 data binding and integration boundaries
     # ------------------------------------------------------------------
 
     def load_model(self) -> None:
-        """Reflect the model selected by UploadCard in the dashboard.
-
-        Actual metadata loading is delegated to ModelService when a scan starts.
-        """
+        """Publish the selected model through DashboardController."""
         model_path = self.upload_card.model_path
-        if not model_path:
-            return
-        model_name = Path(model_path).name or model_path
-        self._set_info_card_value(self.card_models, "1")
-        self.activity.add_activity(f"Model selected: {model_name}")
-        self.logs_widget.add_log(f"Model selected and ready: {model_name}", "INFO")
-        self.statusBar().showMessage(f"Model ready: {model_name}")
-        self.update_statistics(models_loaded=1)
+        if model_path:
+            self.dashboard_controller.model_selected(model_path)
 
     def run_scan(self) -> None:
         """Delegate the full scan workflow to ScanController."""
@@ -345,24 +338,24 @@ class MainWindow(QMainWindow):
         self.scan_controller.start_scan(self.upload_card.model_path)
 
     def update_dashboard(self, status: str = "Protected") -> None:
-        """Update high-level dashboard state from controller events."""
+        """Backward-compatible high-level status hook."""
         self.top_bar.set_system_status(status)
-        self.card_status_value(status)
 
     def update_statistics(
-        self,
-        *,
-        models_loaded: int | None = None,
-        threat_score: int | None = None,
-        status: str | None = None,
+        self, *, models_loaded: int | None = None, threat_score: int | None = None,
+        duration: float | None = None, risk_level: str | None = None, status: str | None = None,
     ) -> None:
-        """Central publication point for normalized backend statistics."""
+        """Compatibility adapter; Day 9 updates normally flow through DashboardController."""
         if models_loaded is not None:
-            self._set_info_card_value(self.card_models, str(models_loaded))
+            self.card_models.update_content(value=str(models_loaded))
         if threat_score is not None:
-            self._set_info_card_value(self.card_threat, f"{threat_score}%")
-        if status is not None:
-            self._set_info_card_value(self.card_status, status)
+            self.card_threat.update_content(value=f"{threat_score}%")
+        if duration is not None:
+            self.card_duration.update_content(value=f"{duration:.1f}s")
+        if risk_level is not None:
+            self.card_risk.update_content(value=risk_level.title())
+        elif status is not None:
+            self.card_risk.update_content(value=status)
 
     def display_report(self) -> None:
         self.navigate_to("reports")
@@ -410,27 +403,12 @@ class MainWindow(QMainWindow):
         self.latest_scan_result = result
         self.last_threat_score = result.threat_score
         self.last_scan_result = result.overall_status
-        self.ui_controller.display_result(result)
+        self.dashboard_controller.bind_scan_result(result)
 
-        self.reports_page.update_latest_report(
-            result.model_name,
-            result.overall_status,
-            result.threat_score,
-            result.scan_duration,
-            result.timestamp,
-            result.recommendation,
-        )
-        self.history_page.history_table.add_scan(
-            f"NF-{self.history_page.history_table.rowCount() + 20:04d}",
-            result.model_name,
-            result.timestamp,
-            f"{result.threat_score}%",
-            result.overall_status,
-        )
         self.refresh_statistics()
 
     def _handle_scan_error(self, module: str, message: str) -> None:
-        self.ui_controller.display_error(module, message)
+        self.dashboard_controller.display_error(module, message)
         QMessageBox.warning(
             self,
             f"{module} Error",
@@ -451,7 +429,7 @@ class MainWindow(QMainWindow):
             label.setText(value)
 
     def card_status_value(self, status: str) -> None:
-        self._set_info_card_value(self.card_status, status)
+        self.card_risk.update_content(value=status)
 
     def _current_model_name(self) -> str:
         if not self.upload_card.model_path:
@@ -463,24 +441,21 @@ class MainWindow(QMainWindow):
         self.latest_scan_result = None
         self.scan_card.scan_button.setEnabled(True)
         self.scan_card.status.setText("●  Ready for analysis")
-        self.progress_card.progress.setValue(0)
-        if hasattr(self.progress_card, "set_stage"):
-            self.progress_card.set_stage("Ready to scan")
+        self.progress_card.reset_progress()
         self.gauge.setValue(0)
-        self.activity.list.clear()
-        self.activity.add_activity("NeuroFence initialized")
-        self.activity.add_activity("Waiting for model")
+        self.activity.clear_entries()
+        self.activity.append_entry("NeuroFence initialized")
+        self.activity.append_entry("Waiting for model")
         self.logs_widget.clear_logs()
-        self.logs_widget.add_log("NeuroFence initialized", "INFO")
-        self.logs_widget.add_log("Waiting for model upload", "INFO")
-        self.logs_widget.add_log("Scanner ready", "SUCCESS")
+        self.logs_widget.append_log("INFO", "NeuroFence initialized")
+        self.logs_widget.append_log("INFO", "Waiting for model upload")
+        self.logs_widget.append_log("SUCCESS", "Scanner ready")
         self.recent_scan_panel.reset()
         self.system_status_card.set_scanner_status("Ready", "normal")
-        self.update_statistics(
-            models_loaded=1 if self.upload_card.model_path else 0,
-            threat_score=0,
-            status="Protected",
-        )
+        self.card_models.update_content(value="1" if self.upload_card.model_path else "0", subtitle="Ready" if self.upload_card.model_path else "No model selected")
+        self.card_threat.update_content(value="0%", subtitle="Awaiting scan result")
+        self.card_duration.update_content(value="—", subtitle="No completed scan")
+        self.card_risk.update_content(value="Ready", subtitle="Scanner standing by")
         self.update_dashboard("Protected")
         self.statusBar().showMessage("Dashboard reset | Ready")
 

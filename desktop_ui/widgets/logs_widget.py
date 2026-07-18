@@ -79,3 +79,7 @@ class LogsWidget(QWidget):
         self.logs.clear()
         self.entry_count = 0
         self.counter.setText("0 EVENTS")
+
+    def append_log(self, level: str, message: str, timestamp: str | None = None) -> None:
+        """Append one structured event using level-first data binding."""
+        self.add_log(message, level, timestamp)

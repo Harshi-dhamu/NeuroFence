@@ -57,3 +57,14 @@ class InfoCard(QFrame):
 
     def set_icon(self, icon: str) -> None:
         self.icon_label.setText(icon)
+
+    def update_content(self, *, title: str | None = None, value: str | None = None, subtitle: str | None = None, icon: str | None = None) -> None:
+        """Update card content without exposing internal labels."""
+        if title is not None:
+            self.set_title(title)
+        if value is not None:
+            self.set_value(value)
+        if subtitle is not None:
+            self.set_subtitle(subtitle)
+        if icon is not None:
+            self.set_icon(icon)
