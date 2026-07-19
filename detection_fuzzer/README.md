@@ -77,3 +77,10 @@ This module is responsible for:
 - Added JSON formatter
 - Added CSV formatter
 - Successfully generated scan_result.csv
+## Day 11 Progress
+
+- Created report.py
+- Added Threat Summary
+- Added Prompt Summary
+- Added Recommendations
+- Successfully generated detection report
