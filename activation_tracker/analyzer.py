@@ -157,3 +157,46 @@ class ActivationAnalyzer:
             }
 
         return layer_scores
+    
+    @staticmethod
+    def compare_activations(
+        activations_a,
+        activations_b,
+    ):
+        """Compare two activation dictionaries layer by layer.
+    """
+
+        comparison = {}
+
+        common_layers = (
+            activations_a.keys() &
+            activations_b.keys()
+        )
+
+        for layer in common_layers:
+
+            tensor_a = activations_a[layer]["activation"]
+            tensor_b = activations_b[layer]["activation"]
+
+            if tensor_a.shape != tensor_b.shape:
+
+                comparison[layer] = {
+                    "status": "shape_mismatch",
+                    "shape_a": tuple(tensor_a.shape),
+                    "shape_b": tuple(tensor_b.shape),
+                }
+
+                continue
+
+            diff = tensor_a - tensor_b
+
+            comparison[layer] = {
+                "status": "ok",
+                "shape": tuple(diff.shape),
+                "mean_difference": float(diff.mean()),
+                "mean_absolute_difference": float(diff.abs().mean()),
+                "maximum_difference": float(diff.abs().max()),
+                "difference_matrix": diff.numpy().tolist(),
+            }
+
+        return comparison

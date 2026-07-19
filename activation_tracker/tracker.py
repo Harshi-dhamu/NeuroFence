@@ -104,3 +104,16 @@ class ActivationTracker:
             self.get_activations(),
             threshold,
     )
+
+    def compare_with(
+        self,
+        other_activations,
+    ):
+        """
+        Compare current activations with another activation set.
+        """
+
+        return ActivationAnalyzer.compare_activations(
+            self.get_activations(),
+            other_activations,
+        )

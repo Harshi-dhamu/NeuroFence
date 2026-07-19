@@ -49,9 +49,10 @@ Implemented
 - NumPy export
 - Visualization data preparation
 - Layer activity scoring
+- Activation comparison
 
 Upcoming
 
-- Activation comparison
 - Performance optimization
 - Public API
+- Documentation
