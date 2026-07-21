@@ -21,9 +21,18 @@ class ActivationTracker:
 
     def start_tracking(self):
         """
-        Register forward hooks.
+        Register forward hooks and clear previous activations.
         """
+
+        self.hook_manager.clear_activations()
         self.hook_manager.register_hooks(self.model)
+
+    def get_activation_count(self):
+        """
+        Return the number of tracked layers.
+        """
+
+        return len(self.get_activations())
 
     def stop_tracking(self):
         """

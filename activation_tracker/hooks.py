@@ -21,7 +21,7 @@ class HookManager:
 
     def _hook_fn(self, layer_name):
         """
-        Forward hook callback.
+        Create a forward hook callback for a specific layer.
         """
 
         def hook(module, inputs, output):
@@ -31,16 +31,23 @@ class HookManager:
             if activation is None:
                 return
 
-            self.activations[layer_name] = create_activation_record(
-                layer_name=layer_name,
-                module=module,
-                activation=activation,
-            )
+            # Performance optimization:
+            # Detach from computation graph and store on CPU.
+            activation = activation.detach().cpu()
+
+            self.activations[layer_name] = {
+                "layer_type": module.__class__.__name__,
+                "activation": activation,
+            }
 
         return hook
 
     def register_hooks(self, model):
+        """
+        Register forward hooks for all model layers.
+        """
 
+        # Clear previous activations before a new tracking session.
         self.activations.clear()
 
         for name, module in model.named_modules():
@@ -55,8 +62,25 @@ class HookManager:
             self.handles.append(handle)
 
     def remove_hooks(self):
+        """
+        Remove all registered forward hooks.
+        """
 
         for handle in self.handles:
             handle.remove()
 
         self.handles.clear()
+
+    def clear_activations(self):
+        """
+        Clear stored activation data.
+        """
+
+        self.activations.clear()
+
+    def get_activations(self):
+        """
+        Return stored activations.
+        """
+
+        return self.activations
