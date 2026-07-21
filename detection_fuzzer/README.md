@@ -92,3 +92,10 @@ This module is responsible for:
 - Tested scoring engine
 - Tested report generation
 - Successfully verified all modules
+## Day 13 Progress
+
+- Created api.py
+- Added run_scan() API
+- Added calculate_score() API
+- Added generate_scan_report() API
+- Successfully tested API module
