@@ -1,0 +1,6 @@
+{
+  "general": {"auto_save_reports": true, "start_maximized": false, "enable_animations": true},
+  "scanner": {"deep_scan": true, "activation_tracking": true, "prompt_fuzzing": true, "scan_timeout": 120},
+  "appearance": {"dark_theme": true, "accent_color": "Cyan", "font_size": 11},
+  "logging": {"file_logging": false, "maximum_log_entries": 500}
+}

@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QFileDialog,
     QMessageBox,
     QPushButton,
     QGraphicsOpacityEffect,
@@ -26,11 +27,15 @@ from desktop_ui.controllers.dashboard_controller import DashboardController
 from desktop_ui.controllers.scan_controller import ScanController
 from desktop_ui.models.scan_result import ScanResult
 from desktop_ui.services.dummy_data_service import DummyDataService
+from desktop_ui.services.export_service import ExportService
+from desktop_ui.services.settings_service import SettingsService
 from desktop_ui.components.recent_scan_panel import RecentScanPanel
 from desktop_ui.components.system_info import SystemInfo
 from desktop_ui.components.system_status_card import SystemStatusCard
 from desktop_ui.components.top_bar import TopBar
 from desktop_ui.pages.history_page import HistoryPage
+from desktop_ui.pages.report_page import ReportPage
+from desktop_ui.pages.settings_page import SettingsPage
 from desktop_ui.pages.reports_page import ReportsPage
 from desktop_ui.widgets.activity_widget import ActivityWidget
 from desktop_ui.widgets.info_card import InfoCard
@@ -57,6 +62,9 @@ class MainWindow(QMainWindow):
         self.last_scan_result = "READY"
         self.latest_scan_result: ScanResult | None = None
 
+        self.settings_service = SettingsService()
+        self.app_settings = self.settings_service.load_settings()
+        self.export_service = ExportService()
         self.setup_ui()
         self.setup_menu()
         self.data_service = DummyDataService()
@@ -65,6 +73,7 @@ class MainWindow(QMainWindow):
         self.connect_signals()
         self.update_dashboard("Protected")
         self.statusBar().showMessage("Ready | NeuroFence scanner protected")
+        self.apply_settings(self.app_settings, startup=True)
         QTimer.singleShot(0, self._update_responsive_layout)
 
     # ------------------------------------------------------------------
@@ -119,9 +128,13 @@ class MainWindow(QMainWindow):
 
         self.reports_page = ReportsPage()
         self.history_page = HistoryPage()
+        self.report_page = ReportPage()
+        self.settings_page = SettingsPage()
         self.page_stack.addWidget(self.reports_page)
         self.page_stack.addWidget(self.history_page)
-        self._page_indexes = {"dashboard": 0, "models": 0, "scan": 0, "reports": 1, "history": 2}
+        self.page_stack.addWidget(self.report_page)
+        self.page_stack.addWidget(self.settings_page)
+        self._page_indexes = {"dashboard": 0, "models": 0, "scan": 0, "reports": 1, "history": 2, "report": 3, "settings": 4}
         self._page_animation = None
     def _build_statistics_section(self) -> None:
         self.stats_container = QWidget()
@@ -234,6 +247,13 @@ class MainWindow(QMainWindow):
         self.history_page.export_requested.connect(self.export_report)
         self.history_page.filter_requested.connect(self.filter_history)
         self.history_page.search_requested.connect(self.search_history)
+        self.report_page.export_json_requested.connect(self.export_json)
+        self.report_page.export_csv_requested.connect(self.export_csv)
+        self.report_page.export_pdf_requested.connect(self.export_pdf)
+        self.report_page.save_requested.connect(self.save_report)
+        self.settings_page.save_requested.connect(self.save_settings)
+        self.settings_page.reset_requested.connect(self.reset_settings)
+        self.settings_page.clear_logs_requested.connect(self.clear_application_logs)
 
         self.scan_controller.scan_started.connect(self.dashboard_controller.prepare_scan)
         self.scan_controller.stage_changed.connect(self.dashboard_controller.update_stage)
@@ -246,9 +266,6 @@ class MainWindow(QMainWindow):
             self.show_about()
             self.sidebar.select_page("dashboard" if self.page_stack.currentIndex() == 0 else page_name)
             return
-        if page_name == "settings":
-            QMessageBox.information(self, "Settings", "Settings page integration is prepared for a future sprint.")
-            return
         index = self._page_indexes.get(page_name, 0)
         self.page_stack.setCurrentIndex(index)
         self.sidebar.select_page(page_name)
@@ -256,7 +273,8 @@ class MainWindow(QMainWindow):
             self.scroll_area.verticalScrollBar().setValue(self.upload_card.y())
         elif page_name == "scan":
             self.scroll_area.verticalScrollBar().setValue(self.scan_card.y())
-        self._animate_current_page()
+        if self.app_settings.get("general", {}).get("enable_animations", True):
+            self._animate_current_page()
 
     def _animate_current_page(self) -> None:
         page = self.page_stack.currentWidget()
@@ -358,7 +376,10 @@ class MainWindow(QMainWindow):
             self.card_risk.update_content(value=status)
 
     def display_report(self) -> None:
-        self.navigate_to("reports")
+        if self.latest_scan_result is None:
+            QMessageBox.information(self, "No Scan Report", "Complete a scan before opening the detailed report.")
+            return
+        self.navigate_to("report")
 
     def load_scan_history(self) -> None:
         """TODO: load persisted scan records from the future storage backend."""
@@ -373,15 +394,43 @@ class MainWindow(QMainWindow):
         self.reports_page.threat_statistics.set_statistics(critical=0, medium=2, low=5, safe=17)
 
     def export_report(self) -> None:
-        """TODO: call IntegrationBridge.export_results and a file writer later."""
+        """Open the detailed report viewer and its export toolbar."""
+        self.display_report()
+
+    def build_report(self):
+        """Build a normalized report from the latest ScanResult."""
+        return self.export_service.build_report(self.latest_scan_result) if self.latest_scan_result else None
+
+    def _require_result(self) -> bool:
         if self.latest_scan_result is None:
             QMessageBox.information(self, "Nothing to Export", "Run a scan before exporting a report.")
-            return
-        QMessageBox.information(
-            self,
-            "Export Prepared",
-            "The normalized scan result is ready for PDF, JSON or CSV export integration.",
-        )
+            return False
+        return True
+
+    def export_json(self) -> None:
+        if not self._require_result(): return
+        path, _ = QFileDialog.getSaveFileName(self, "Export JSON", "neurofence_report.json", "JSON Files (*.json)")
+        if path:
+            self.export_service.export_json(self.latest_scan_result, path)
+            self.statusBar().showMessage(f"JSON report exported: {path}")
+
+    def export_csv(self) -> None:
+        if not self._require_result(): return
+        path, _ = QFileDialog.getSaveFileName(self, "Export CSV", "neurofence_report.csv", "CSV Files (*.csv)")
+        if path:
+            self.export_service.export_csv(self.latest_scan_result, path)
+            self.statusBar().showMessage(f"CSV report exported: {path}")
+
+    def export_pdf(self) -> None:
+        if not self._require_result(): return
+        QMessageBox.information(self, "PDF Export", "PDF export is prepared for the final renderer after the report format is frozen.")
+
+    def save_report(self) -> None:
+        if not self._require_result(): return
+        path, _ = QFileDialog.getSaveFileName(self, "Save Report", "neurofence_saved_report.json", "Report Files (*.json)")
+        if path:
+            self.export_service.save_report(self.latest_scan_result, path)
+            self.statusBar().showMessage(f"Report saved: {path}")
 
     def search_history(self, query: str = "") -> None:
         """Search hook; HistoryTable currently performs local filtering."""
@@ -404,7 +453,9 @@ class MainWindow(QMainWindow):
         self.last_threat_score = result.threat_score
         self.last_scan_result = result.overall_status
         self.dashboard_controller.bind_scan_result(result)
-
+        self.report_page.set_scan_result(result)
+        if self.app_settings.get("general", {}).get("auto_save_reports", False):
+            self.logs_widget.append_log("INFO", "Auto-save preference enabled; report is ready for persistence")
         self.refresh_statistics()
 
     def _handle_scan_error(self, module: str, message: str) -> None:
@@ -439,6 +490,8 @@ class MainWindow(QMainWindow):
     def reset_dashboard(self) -> None:
         self.scan_controller.cancel_scan()
         self.latest_scan_result = None
+        if hasattr(self, "report_page"):
+            self.report_page.clear_report()
         self.scan_card.scan_button.setEnabled(True)
         self.scan_card.status.setText("●  Ready for analysis")
         self.progress_card.reset_progress()
@@ -459,6 +512,35 @@ class MainWindow(QMainWindow):
         self.update_dashboard("Protected")
         self.statusBar().showMessage("Dashboard reset | Ready")
 
+    def save_settings(self, settings: dict) -> None:
+        self.settings_service.save_settings(settings)
+        self.app_settings = settings
+        self.apply_settings(settings)
+        self.logs_widget.append_log("SUCCESS", "Application settings saved")
+        self.statusBar().showMessage("Settings saved and applied")
+
+    def reset_settings(self) -> None:
+        settings = self.settings_service.reset_to_defaults()
+        self.settings_page.set_settings(settings)
+        self.app_settings = settings
+        self.apply_settings(settings)
+        self.statusBar().showMessage("Settings reset to defaults")
+
+    def apply_settings(self, settings: dict, startup: bool = False) -> None:
+        self.settings_page.set_settings(settings)
+        font_size = int(settings.get("appearance", {}).get("font_size", 11))
+        font = self.font(); font.setPointSize(font_size); self.setFont(font)
+        max_logs = int(settings.get("logging", {}).get("maximum_log_entries", 500))
+        if hasattr(self.logs_widget, "console"):
+            self.logs_widget.console.document().setMaximumBlockCount(max_logs)
+        if startup and settings.get("general", {}).get("start_maximized", False):
+            QTimer.singleShot(0, self.showMaximized)
+
+    def clear_application_logs(self) -> None:
+        self.logs_widget.clear_logs()
+        self.logs_widget.append_log("INFO", "Logs cleared from Settings")
+        self.statusBar().showMessage("Application logs cleared")
+
     def toggle_fullscreen(self) -> None:
         self.showNormal() if self.isFullScreen() else self.showFullScreen()
 
@@ -467,8 +549,14 @@ class MainWindow(QMainWindow):
             self,
             "About NeuroFence",
             (
-                "<b>NeuroFence v1.0</b><br><br>"
-                "LLM Weight Poisoning &amp; Backdoor Scanner<br>"
-                "Enterprise cybersecurity dashboard built with PyQt6."
+                "<b>NeuroFence v1.1</b><br><br>"
+                "A desktop security platform for detecting model poisoning, backdoors, "
+                "suspicious prompts and abnormal neural activations.<br><br>"
+                "<b>Team responsibilities</b><br>"
+                "Harshi — Desktop UI, orchestration, reports and configuration<br>"
+                "Tanvi — Model Loader and metadata<br>"
+                "Dhruti — Detection and prompt fuzzing<br>"
+                "Akhina — Activation tracking and neuron analysis<br><br>"
+                "Developed as part of the internship project using Python and PyQt6."
             ),
         )

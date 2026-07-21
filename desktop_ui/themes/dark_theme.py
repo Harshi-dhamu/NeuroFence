@@ -154,6 +154,19 @@ def get_dark_theme():
         background:#0B1E31; color:#7DD3FC; border:none; border-bottom:1px solid #29445F;
         padding:12px; font-weight:700;
     }
+
+    QScrollArea#ReportPage, QScrollArea#SettingsPage { background:#07111F; border:none; }
+    QFrame#ReportSection, QFrame#RecommendationCard, QFrame#SettingsGroup {
+        background:rgba(13,27,45,218); border:1px solid rgba(104,164,213,48); border-radius:16px;
+    }
+    QLabel#reportKey, QLabel#settingName { color:#8EA0B8; font-weight:650; }
+    QLabel#reportValue { color:#E8F3FF; font-weight:650; }
+    QLabel#settingDescription { color:#64748B; font-size:9pt; }
+    QLabel#toolbarTitle { color:#BAE6FD; font-weight:700; }
+    QPushButton#toggleSwitch { background:#17283C; color:#8193A8; border:1px solid #29445F; border-radius:15px; font-size:14pt; padding:0; }
+    QPushButton#toggleSwitch[active="true"] { background:#0F766E; color:#ECFEFF; border:1px solid #2DD4BF; }
+    QSpinBox, QComboBox { background:#081422; color:#E2E8F0; border:1px solid #29445F; border-radius:8px; padding:8px; min-width:130px; }
+    QSpinBox:focus, QComboBox:focus { border:1px solid #38BDF8; }
     """
 
 
