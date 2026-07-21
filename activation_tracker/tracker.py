@@ -117,3 +117,17 @@ class ActivationTracker:
             self.get_activations(),
             other_activations,
         )
+    
+    def generate_comparison_report(self, other_activations):
+        """
+        Compare activations and generate a summary report.
+        """
+
+        comparison = ActivationAnalyzer.compare_activations(
+            self.get_activations(),
+            other_activations,
+        )
+
+        return ActivationAnalyzer.generate_comparison_report(
+            comparison
+        )

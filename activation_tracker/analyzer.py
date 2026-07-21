@@ -181,6 +181,7 @@ class ActivationAnalyzer:
             if tensor_a.shape != tensor_b.shape:
 
                 comparison[layer] = {
+                    "layer_type": activations_a[layer]["layer_type"],
                     "status": "shape_mismatch",
                     "shape_a": tuple(tensor_a.shape),
                     "shape_b": tuple(tensor_b.shape),
@@ -191,6 +192,7 @@ class ActivationAnalyzer:
             diff = tensor_a - tensor_b
 
             comparison[layer] = {
+                "layer_type": activations_a[layer]["layer_type"],
                 "status": "ok",
                 "shape": tuple(diff.shape),
                 "mean_difference": float(diff.mean()),
@@ -198,5 +200,52 @@ class ActivationAnalyzer:
                 "maximum_difference": float(diff.abs().max()),
                 "difference_matrix": diff.numpy().tolist(),
             }
-
         return comparison
+    
+    @staticmethod
+    def generate_comparison_report(comparison_results):
+        """
+        Generate a summary report from activation comparison results.
+        """
+
+        report = {
+            "total_layers": 0,
+            "average_difference": 0.0,
+            "most_changed_layer": None,
+            "highest_difference": 0.0,
+            "layers": {}
+        }
+
+        total_difference = 0.0
+
+        for layer_name, info in comparison_results.items():
+
+            if info["status"] != "ok":
+                continue
+
+            difference = info["mean_absolute_difference"]
+
+            report["layers"][layer_name] = {
+                "layer_type": info.get("layer_type", "Unknown"),
+                "mean_absolute_difference": difference,
+                "maximum_difference": info["maximum_difference"]
+            }
+
+            total_difference += difference
+            report["total_layers"] += 1
+
+            if difference > report["highest_difference"]:
+                report["highest_difference"] = difference
+
+                report["most_changed_layer"] = {
+                    "layer_name": layer_name,
+                    "layer_type": info["layer_type"],
+                    "mean_absolute_difference": difference,
+                    "maximum_difference": info["maximum_difference"],
+                }
+        if report["total_layers"] > 0:
+            report["average_difference"] = (
+                total_difference / report["total_layers"]
+            )
+
+        return report
