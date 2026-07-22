@@ -5,6 +5,7 @@ from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 
 from desktop_ui.models.scan_result import ScanResult
 from desktop_ui.services.dummy_data_service import DummyDataService
+from desktop_ui.controllers.integration_controller import IntegrationController
 
 
 class ScanController(QObject):
@@ -29,6 +30,7 @@ class ScanController(QObject):
     def __init__(self, data_service: DummyDataService | None = None, parent=None) -> None:
         super().__init__(parent)
         self.data_service = data_service or DummyDataService()
+        self.integration_controller = IntegrationController()
         self.timer = QTimer(self)
         self.timer.setInterval(520)
         self.timer.timeout.connect(self._advance)
@@ -50,9 +52,9 @@ class ScanController(QObject):
         self._stage_index = 0
         try:
             # Future replacement point: real Model/Detection/Activation providers.
-            self._result = self.data_service.get_scan_result(model_path)
+            self._result = (self.integration_controller.execute_scan_pipeline(model_path))
         except Exception as exc:
-            self.scan_failed.emit("Dummy Data Service", str(exc))
+            self.scan_failed.emit("Integration Controller", str(exc))
             return
         self.scan_state_changed.emit("SCANNING")
         self.scan_started.emit(model_path)

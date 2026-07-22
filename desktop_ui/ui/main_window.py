@@ -1,6 +1,9 @@
 """Day 9 NeuroFence window: data-driven presentation and navigation layer."""
 
-from __future__ import annotations
+from desktop_ui.controllers.integration_controller import (
+    IntegrationController,
+)
+
 
 from pathlib import Path
 
@@ -70,6 +73,7 @@ class MainWindow(QMainWindow):
         self.data_service = DummyDataService()
         self.scan_controller = ScanController(self.data_service, self)
         self.dashboard_controller = DashboardController(self, self.data_service)
+        self.integration_controller = IntegrationController(dashboard_controller=self.dashboard_controller,logs_widget=self.logs_widget,status_callback=self.statusBar().showMessage,)
         self.connect_signals()
         self.update_dashboard("Protected")
         self.statusBar().showMessage("Ready | NeuroFence scanner protected")
@@ -351,9 +355,16 @@ class MainWindow(QMainWindow):
     def run_scan(self) -> None:
         """Delegate the full scan workflow to ScanController."""
         if self.scan_controller.is_running:
-            self.logs_widget.add_log("A scan is already in progress", "WARNING")
+            self.logs_widget.append_log("WARNING", "A scan is already in progress")
             return
-        self.scan_controller.start_scan(self.upload_card.model_path)
+        model_path = self.upload_card.model_path
+
+        if not model_path:
+            QMessageBox.warning(self, "No Model Selected", "Please select a model first.")
+            return
+        
+        self.logs_widget.append_log("INFO","Starting integration pipeline...")
+        self.scan_controller.start_scan(model_path)
 
     def update_dashboard(self, status: str = "Protected") -> None:
         """Backward-compatible high-level status hook."""
@@ -449,6 +460,9 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _handle_scan_completed(self, result: ScanResult) -> None:
+        if not self.validate_scan_result(result):
+            QMessageBox.warning(self, "Validation Error", "Scan result failed validation.")
+            return
         self.latest_scan_result = result
         self.last_threat_score = result.threat_score
         self.last_scan_result = result.overall_status
@@ -459,11 +473,12 @@ class MainWindow(QMainWindow):
         self.refresh_statistics()
 
     def _handle_scan_error(self, module: str, message: str) -> None:
-        self.dashboard_controller.display_error(module, message)
+        self.logs_widget.append_log("ERROR", f"{module}: {message}")
+        self.statusBar().showMessage(f"Error: {module}")
         QMessageBox.warning(
             self,
             f"{module} Error",
-            f"The scan could not continue.\n\n{message}\n\nCheck the selected model and try again.",
+            message,
         )
 
     # ------------------------------------------------------------------
@@ -540,10 +555,48 @@ class MainWindow(QMainWindow):
         self.logs_widget.clear_logs()
         self.logs_widget.append_log("INFO", "Logs cleared from Settings")
         self.statusBar().showMessage("Application logs cleared")
-
+    
+    
     def toggle_fullscreen(self) -> None:
         self.showNormal() if self.isFullScreen() else self.showFullScreen()
 
+    def get_model_loader(self):
+        """
+        Day 13 integration hook
+        Tanvi's Model Loader
+        """
+        return None
+
+    def get_detection_service(self):
+        """
+        Day 13 integration hook
+        Dhruti's Detection Service
+        """
+        return None
+
+    def get_activation_tracker(self):
+        """
+        Day 13 integration hook
+        Akhina's Activation Tracker
+        """
+        return None 
+
+    def validate_scan_result(self,result,) -> bool:
+        if result is None:
+            return False
+        required = [
+            "model_name",
+            "framework",
+            "architecture",
+            "threat_score",
+            "risk_level",
+            "scan_duration",]
+        for field in required:
+            if not hasattr(result, field):
+                self.logs_widget.append_log("ERROR",f"Missing field: {field}")
+                return False
+        return True
+     
     def show_about(self) -> None:
         QMessageBox.about(
             self,
