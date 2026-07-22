@@ -1,11 +1,38 @@
-# Detection & Fuzzing
+# NeuroFence - Detection Fuzzer
+
+AI Prompt Security Detection Module
+
+---
+
+## Project Overview
+
+NeuroFence is a prompt security detection tool that identifies malicious prompts, calculates risk scores, and generates security reports.
+
+---
+
+## Features
+
+- Prompt Categorization
+- Prompt Mutation
+- Prompt Execution
+- Keyword Detection
+- Pattern Matching
+- Threat Scoring
+- Risk Level Calculation
+- Report Generation
+- API Support
+- Testing Module
+
+## Detection & Fuzzing
 
 Assigned Member: Dhruti
 
 This module is responsible for:
+
 - Generating adversarial prompts
 - Executing fuzz tests
 - Detecting anomalous model behavior
+
 ## Day 2 Progress
 
 - Created `loader.py` to load prompts from `prompts/prompts.json`
@@ -13,6 +40,7 @@ This module is responsible for:
   - FileNotFoundError
   - JSONDecodeError
 - Successfully tested the prompt loader.
+
 ## Day 3 Progress
 
 - Added Prompt Manager
@@ -20,6 +48,7 @@ This module is responsible for:
 - Added category support
 - Added random prompt selection
 - Expanded prompt dataset
+
 ## Day 4 Progress
 
 - Added Fuzz Engine
@@ -27,6 +56,7 @@ This module is responsible for:
 - Implemented batch generation
 - Added sequential prompt retrieval
 - Prepared the module for future scan integration
+
 ## Day 5 Progress
 
 - Added prompt categorization
@@ -34,6 +64,7 @@ This module is responsible for:
 - Implemented Medium Risk prompts
 - Implemented Low Risk prompts
 - Successfully tested risk categorization
+
 ## Day 6 Progress
 
 - Added Prompt Mutator
@@ -41,6 +72,7 @@ This module is responsible for:
 - Implemented prompt suffixing
 - Added Base64 prompt encoding
 - Implemented random prompt mutations
+
 ## Day 7 Progress
 
 - Created `executor.py`
@@ -48,13 +80,7 @@ This module is responsible for:
 - Stored simulated responses
 - Added execution logging
 - Successfully tested the prompt executor
-## Day 8 Progress
 
-- Created `detector.py`
-- Implemented keyword detection
-- Added suspicious output detection
-- Implemented basic pattern matching
-- Successfully tested detection rules
 ## Day 8 Progress
 
 - Created detector.py
@@ -62,6 +88,7 @@ This module is responsible for:
 - Added suspicious output detection
 - Implemented regex-based pattern matching
 - Successfully tested detection rules
+
 ## Day 9 Progress
 
 - Created scoring.py
@@ -70,6 +97,7 @@ This module is responsible for:
 - Added Confidence calculation
 - Added Risk Level calculation
 - Successfully tested scoring engine
+
 ## Day 10 Progress
 
 - Created formatter.py
@@ -77,6 +105,7 @@ This module is responsible for:
 - Added JSON formatter
 - Added CSV formatter
 - Successfully generated scan_result.csv
+
 ## Day 11 Progress
 
 - Created report.py
@@ -84,6 +113,7 @@ This module is responsible for:
 - Added Prompt Summary
 - Added Recommendations
 - Successfully generated detection report
+
 ## Day 12 Progress
 
 - Created test_detection.py
@@ -92,6 +122,7 @@ This module is responsible for:
 - Tested scoring engine
 - Tested report generation
 - Successfully verified all modules
+
 ## Day 13 Progress
 
 - Created api.py
@@ -99,3 +130,23 @@ This module is responsible for:
 - Added calculate_score() API
 - Added generate_scan_report() API
 - Successfully tested API module
+
+## Day 14 Progress
+
+- Updated project documentation
+- Added project overview
+- Added feature list
+- Added installation guide
+- Added usage instructions
+- Updated README structure
+- Cleaned project documentation
+
+---
+
+## Project Status
+
+✅ Detection Module Completed
+
+Current Version: v1.0
+
+Status: Ready for Integration
