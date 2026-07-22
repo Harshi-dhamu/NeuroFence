@@ -18,15 +18,17 @@ class ActivationTracker:
     def __init__(self, model: Any):
         self.model = model
         self.hook_manager = HookManager()
+        self._tracking = False
 
     def start_tracking(self):
         """
-        Register forward hooks and clear previous activations.
+        Register forward hooks and start tracking.
         """
 
         self.hook_manager.clear_activations()
         self.hook_manager.register_hooks(self.model)
 
+        self._tracking = True
     def get_activation_count(self):
         """
         Return the number of tracked layers.
@@ -36,9 +38,12 @@ class ActivationTracker:
 
     def stop_tracking(self):
         """
-        Remove hooks.
+        Remove forward hooks and stop tracking.
         """
+
         self.hook_manager.remove_hooks()
+
+        self._tracking = False
 
     def get_activations(self) -> Dict[str, Any]:
         """
@@ -140,3 +145,39 @@ class ActivationTracker:
         return ActivationAnalyzer.generate_comparison_report(
             comparison
         )
+    
+    def is_tracking(self):
+        """
+        Return whether activation tracking is currently enabled.
+        """
+
+        return self._tracking
+    
+    def reset_tracker(self):
+        """
+        Reset all stored activations.
+        """
+
+        self.hook_manager.clear_activations()
+
+    def track_activation(self, input_tensor):
+        """
+        Perform a single forward pass while tracking activations.
+        """
+
+        self.start_tracking()
+
+        self.model(input_tensor)
+
+        self.stop_tracking()
+
+        return self.get_activations()
+    
+    def export_all(self, folder="activations"):
+        """
+        Export activations in all supported formats.
+        """
+
+        self.export_json(folder)
+
+        self.export_numpy(folder)

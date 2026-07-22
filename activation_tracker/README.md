@@ -51,6 +51,10 @@ Implemented
 - Layer activity scoring
 - Activation comparison
 
+- Public API
+- Tracker state management
+- Single-call activation tracking
+
 Upcoming
 
 - Performance optimization
