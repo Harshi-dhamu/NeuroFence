@@ -35,10 +35,12 @@ class HookManager:
             # Detach from computation graph and store on CPU.
             activation = activation.detach().cpu()
 
-            self.activations[layer_name] = {
-                "layer_type": module.__class__.__name__,
-                "activation": activation,
-            }
+            self.activations[layer_name] = create_activation_record(
+                    layer_name,
+                    module,
+                    activation,
+                )
+            
 
         return hook
 

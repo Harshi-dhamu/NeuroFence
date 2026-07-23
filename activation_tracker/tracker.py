@@ -29,6 +29,7 @@ class ActivationTracker:
         self.hook_manager.register_hooks(self.model)
 
         self._tracking = True
+
     def get_activation_count(self):
         """
         Return the number of tracked layers.
@@ -181,3 +182,18 @@ class ActivationTracker:
         self.export_json(folder)
 
         self.export_numpy(folder)
+
+    def export_json(self, output_file):
+        statistics = self.get_statistics()
+
+        ActivationLogger.export_statistics(
+            statistics,
+            output_file,
+        )
+
+    def detect_anomalies(self, threshold=1e-5):
+        """
+        Detect anomalous neuron activity.
+        """
+
+        return self.analyze_neuron_activity(threshold)

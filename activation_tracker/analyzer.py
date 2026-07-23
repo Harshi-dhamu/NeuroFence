@@ -160,8 +160,8 @@ class ActivationAnalyzer:
     
     @staticmethod
     def compare_activations(
-        activations_a,
-        activations_b,
+         activations_a: Dict[str, Dict[str, Any]],
+         activations_b: Dict[str, Dict[str, Any]],
     ):
         """Compare two activation dictionaries layer by layer.
     """
