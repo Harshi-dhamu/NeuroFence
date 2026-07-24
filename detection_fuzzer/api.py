@@ -7,14 +7,14 @@ Provides:
 - generate_scan_report()
 """
 
-from detector import detect_keywords, pattern_match
-from scoring import (
+from .detector import detect_keywords, pattern_match
+from .scoring import (
     calculate_threat_score,
     calculate_severity,
     calculate_confidence,
     calculate_risk_level,
 )
-from report import generate_report
+from .report import generate_report
 
 
 def calculate_score(prompt):
