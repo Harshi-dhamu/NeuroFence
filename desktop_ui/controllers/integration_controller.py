@@ -1,4 +1,5 @@
 from __future__ import annotations
+from unittest import result
 
 from desktop_ui.services.integration_service import (
     IntegrationService,
@@ -8,6 +9,21 @@ from desktop_ui.validators.result_validator import (
     ResultValidator,
 )
 
+from desktop_ui.services.model_service import (
+    ModelService
+)
+
+from desktop_ui.services.detection_service import (
+    DetectionService
+)
+
+from desktop_ui.services.activation_service import (
+    ActivationService
+)
+
+from desktop_ui.models.scan_result import (
+    ScanResult
+)
 
 class IntegrationController:
     def __init__(
@@ -16,6 +32,10 @@ class IntegrationController:
         logs_widget=None,
         status_callback=None,
     ):
+        self.model_service = ModelService()
+        self.detection_service = DetectionService()
+        self.activation_service = ActivationService()
+
         self.service = IntegrationService()
 
         self.dashboard_controller = dashboard_controller
@@ -34,59 +54,34 @@ class IntegrationController:
         self,
         model_path=None,
     ):
-        try:
-            self.set_status("Loading model...")
-            self.log("INFO", "Loading model")
-
-            model_info = self.service.load_model(model_path)
-
-            self.set_status("Running detection...")
-            self.log("INFO", "Running detection")
-
-            self.service.run_detection(model_info)
-
-            self.set_status("Running activation tracking...")
-            self.log(
-                "INFO",
-                "Running activation tracker"
+        load_result = self.model_service.load_model(model_path)
+        validated = self.model_service.validate_model()
+        if not validated:
+            raise ValueError("Model validation failed")
+        model_info = self.model_service.get_model_info()
+        detection = self.detection_service.run_detection("security scan")
+        activation = self.activation_service.analyze(self.model_service.loader)
+        result = ScanResult()
+        result.model_name = (
+            model_info["model_identity"]["name"]
             )
-
-            self.service.run_activation_tracker(
-                model_info
+        result.framework = (
+            model_info["tensor_properties"]["framework"]
             )
-
-            result = (
-                self.service.get_complete_result()
+        result.architecture = (
+            model_info["architecture_details"]["architecture"]
             )
-
-            errors = (
-                ResultValidator.validate(result)
+        result.layers = (
+            model_info["architecture_details"]["layers_count"]
             )
-
-            if errors:
-                raise ValueError(
-                    "\n".join(errors)
-                )
-
-            self.log(
-                "SUCCESS",
-                "Scan pipeline completed"
+        result.threat_score = detection["score"]
+        result.risk_level = detection["risk_level"]
+        result.activation_summary = (
+            f"{len(activation['statistics'])} layers analyzed"
             )
-
-            self.set_status(
-                "Scan completed successfully."
+        result.detection_summary = str(
+            detection["report"]
             )
-
-            return result
-
-        except Exception as exc:
-            self.log(
-                "ERROR",
-                str(exc)
-            )
-
-            self.set_status(
-                "Scan failed."
-            )
-
-            raise
+        result.overall_status = "SAFE"
+        return result
+        

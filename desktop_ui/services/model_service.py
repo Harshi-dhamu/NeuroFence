@@ -1,50 +1,23 @@
-"""Adapter for Tanvi's Model Loader & Sandbox module."""
-from __future__ import annotations
-
-from pathlib import Path
-
-
-class ModelServiceError(RuntimeError):
-    """Raised when model loading or validation fails."""
+from model_loader.core import ModelLoader
 
 
 class ModelService:
-    """Load a model and return normalized metadata for the scan pipeline."""
+    def __init__(self):
+        self.loader = None
 
-    def load_model(self, model_path: str) -> dict[str, object]:
-        path = Path(model_path)
-        if not model_path:
-            raise ModelServiceError("No model was selected.")
-        if not path.exists():
-            raise ModelServiceError(f"The selected model path does not exist: {model_path}")
+    def load_model(self, model_path):
+        self.loader = ModelLoader(model_path=model_path)
 
-        model_files = [item for item in path.rglob("*") if item.is_file()] if path.is_dir() else [path]
-        total_bytes = sum(item.stat().st_size for item in model_files if item.exists())
-        suffixes = {item.suffix.lower() for item in model_files}
+        return self.loader.load_safely()
 
-        framework = "PyTorch"
-        if ".h5" in suffixes or ".keras" in suffixes:
-            framework = "TensorFlow / Keras"
-        elif ".onnx" in suffixes:
-            framework = "ONNX"
-        elif ".gguf" in suffixes:
-            framework = "GGUF"
+    def validate_model(self):
+        if not self.loader:
+            raise RuntimeError("Model not loaded")
 
-        # TODO(Tanvi): replace this placeholder inspection with the real
-        # Model Loader & Sandbox API while preserving this return structure.
-        return {
-            "model_name": path.name or "Selected Model",
-            "model_path": str(path),
-            "framework": framework,
-            "architecture": "Transformer (placeholder)",
-            "file_size_mb": round(total_bytes / (1024 * 1024), 2),
-            "layers": 24,
-            "file_count": len(model_files),
-        }
+        return self.loader.validate_weights()
 
-    def validate_model(self, metadata: dict[str, object]) -> bool:
-        # TODO(Tanvi): perform sandbox validation, format checks and integrity
-        # verification here. Raise ModelServiceError for friendly UI handling.
-        if not metadata.get("model_name"):
-            raise ModelServiceError("Model metadata is incomplete.")
-        return True
+    def get_model_info(self):
+        if not self.loader:
+            raise RuntimeError("Model not loaded")
+
+        return self.loader.get_model_info()
