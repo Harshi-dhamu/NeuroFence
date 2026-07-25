@@ -1,0 +1,15 @@
+{
+  "version": "1.0",
+  "truncation": null,
+  "padding": null,
+  "added_tokens": [],
+  "normalizer": null,
+  "model": {
+    "type": "BPE",
+    "vocab": {
+      "<s>": 0,
+      "</s>": 1,
+      "<unk>": 2
+    }
+  }
+}
