@@ -1,21 +1,19 @@
-from detection_engine import (
+from detection_fuzzer.api import (
     run_scan,
     calculate_score,
-    generate_report,
+    generate_scan_report,
 )
 
 
 class DetectionService:
-
-    def run_detection(self, prompt):
-
+    def run_detection(self, prompt: str):
         report = run_scan(prompt)
 
         score, severity, confidence, risk_level = (
             calculate_score(prompt)
         )
 
-        detailed_report = generate_report(prompt)
+        detailed_report = generate_scan_report(prompt)
 
         return {
             "report": report,
