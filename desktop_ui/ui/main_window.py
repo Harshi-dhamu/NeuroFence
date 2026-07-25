@@ -565,21 +565,21 @@ class MainWindow(QMainWindow):
         Day 13 integration hook
         Tanvi's Model Loader
         """
-        return None
+        return self.integration_controller.model_service
 
     def get_detection_service(self):
         """
         Day 13 integration hook
         Dhruti's Detection Service
         """
-        return None
+        return self.integration_controller.detection_service
 
     def get_activation_tracker(self):
         """
         Day 13 integration hook
         Akhina's Activation Tracker
         """
-        return None 
+        return self.integration_controller.activation_service
 
     def validate_scan_result(self,result,) -> bool:
         if result is None:

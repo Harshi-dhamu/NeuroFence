@@ -1,31 +1,140 @@
-"""Day 10 report building and local export framework."""
 from __future__ import annotations
-import csv, json
+
+import csv
+import json
 from pathlib import Path
-from typing import Any
-from desktop_ui.models.scan_result import ScanResult
+
 
 class ExportService:
-    def build_report(self,result: ScanResult) -> dict[str,Any]:
-        """Normalize ScanResult for display/export; replace or extend for backend reports later."""
-        return result.to_dict()
-    def export_json(self,result: ScanResult,path: str) -> Path:
-        target=Path(path); target.write_text(json.dumps(self.build_report(result),indent=2,default=str),encoding="utf-8"); return target
-    def export_csv(self,result: ScanResult,path: str) -> Path:
-        target=Path(path); flat=self._flatten(self.build_report(result))
-        with target.open("w",newline="",encoding="utf-8") as handle:
-            writer=csv.writer(handle); writer.writerow(["Field","Value"]); writer.writerows(flat.items())
-        return target
-    def export_pdf(self,result: ScanResult,path: str) -> Path:
-        """Placeholder PDF hook. Real PDF renderer will be added after final report format is frozen."""
-        raise NotImplementedError("PDF export framework is prepared; connect the final PDF renderer here.")
-    def save_report(self,result: ScanResult,path: str) -> Path:
-        return self.export_json(result,path)
-    def _flatten(self,data: dict[str,Any],prefix: str="") -> dict[str,Any]:
-        output={}
-        for key,value in data.items():
-            name=f"{prefix}.{key}" if prefix else key
-            if isinstance(value,dict): output.update(self._flatten(value,name))
-            elif isinstance(value,list): output[name]="; ".join(map(str,value))
-            else: output[name]=value
-        return output
+
+    def build_report(
+        self,
+        scan_result,
+    ):
+        """
+        Convert ScanResult into a serializable dictionary.
+        """
+
+        if hasattr(scan_result, "to_dict"):
+            return scan_result.to_dict()
+
+        return {}
+
+    def export_json(
+        self,
+        scan_result,
+        file_path="report.json",
+    ):
+        """
+        Export report as JSON.
+        """
+
+        report_data = self.build_report(
+            scan_result
+        )
+
+        with open(
+            file_path,
+            "w",
+            encoding="utf-8",
+        ) as file:
+
+            json.dump(
+                report_data,
+                file,
+                indent=4,
+                default=str,
+            )
+
+        return Path(file_path)
+
+    def export_csv(
+        self,
+        scan_result,
+        file_path="report.csv",
+    ):
+        """
+        Export report as CSV.
+        """
+
+        report_data = self.build_report(
+            scan_result
+        )
+
+        with open(
+            file_path,
+            "w",
+            newline="",
+            encoding="utf-8",
+        ) as file:
+
+            writer = csv.writer(file)
+
+            writer.writerow(
+                [
+                    "Field",
+                    "Value",
+                ]
+            )
+
+            for key, value in report_data.items():
+
+                writer.writerow(
+                    [
+                        key,
+                        str(value),
+                    ]
+                )
+
+        return Path(file_path)
+
+    def export_pdf(
+        self,
+        scan_result,
+        file_path="report.pdf",
+    ):
+        """
+        Placeholder PDF export.
+
+        Can be replaced later with ReportLab.
+        """
+
+        report_data = self.build_report(
+            scan_result
+        )
+
+        with open(
+            file_path,
+            "w",
+            encoding="utf-8",
+        ) as file:
+
+            file.write(
+                "NEUROFENCE SCAN REPORT\n"
+            )
+
+            file.write(
+                "=" * 40 + "\n\n"
+            )
+
+            for key, value in report_data.items():
+
+                file.write(
+                    f"{key}: {value}\n\n"
+                )
+
+        return Path(file_path)
+
+    def save_report(
+        self,
+        scan_result,
+        file_path="saved_report.json",
+    ):
+        """
+        Save report to disk.
+        """
+
+        return self.export_json(
+            scan_result,
+            file_path,
+        )

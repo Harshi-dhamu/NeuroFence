@@ -1,25 +1,33 @@
 from __future__ import annotations
 
-from desktop_ui.models.scan_result import ScanResult
+import time
 
-from desktop_ui.services.model_service import ModelService
-from desktop_ui.services.detection_service import DetectionService
-from desktop_ui.services.activation_service import ActivationService
-from desktop_ui.services.integration_service import IntegrationService
+from desktop_ui.services.integration_service import (
+    IntegrationService,
+)
 
-from desktop_ui.validators.result_validator import ResultValidator
+from desktop_ui.validators.result_validator import (
+    ResultValidator,
+)
+
+from desktop_ui.services.model_service import (
+    ModelService,
+)
+
+from desktop_ui.services.detection_service import (
+    DetectionService,
+)
+
+from desktop_ui.services.activation_service import (
+    ActivationService,
+)
+
+from desktop_ui.models.scan_result import (
+    ScanResult,
+)
 
 
 class IntegrationController:
-    """
-    Day 12 / Day 13 Integration Controller
-
-    Responsibilities:
-    - Coordinate backend modules
-    - Validate returned data
-    - Merge results into ScanResult
-    - Update dashboard through common model
-    """
 
     def __init__(
         self,
@@ -31,294 +39,350 @@ class IntegrationController:
         self.detection_service = DetectionService()
         self.activation_service = ActivationService()
 
-        self.integration_service = IntegrationService()
+        self.service = IntegrationService()
 
         self.dashboard_controller = dashboard_controller
         self.logs_widget = logs_widget
         self.status_callback = status_callback
 
-    # --------------------------------------------------
-    # Logging Helpers
-    # --------------------------------------------------
-
-    def log(self, level: str, message: str):
+    def log(
+        self,
+        level,
+        message,
+    ):
         if self.logs_widget:
-            try:
-                self.logs_widget.append_log(level, message)
-            except Exception:
-                pass
+            self.logs_widget.append_log(
+                level,
+                message,
+            )
 
-    def set_status(self, text: str):
+    def set_status(
+        self,
+        text,
+    ):
         if self.status_callback:
-            try:
-                self.status_callback(text)
-            except Exception:
-                pass
-
-    # --------------------------------------------------
-    # Main Pipeline
-    # --------------------------------------------------
+            self.status_callback(text)
 
     def execute_scan_pipeline(
         self,
-        model_path: str,
-        prompt: str = "security scan",
-    ) -> ScanResult:
+        model_path=None,
+    ):
 
-        self.set_status("Loading model...")
-        self.log("INFO", "Starting scan pipeline")
-
-        # =====================================
-        # STEP 1 - LOAD MODEL
-        # =====================================
-
-        load_result = self.model_service.load_model(
-            model_path
-        )
-
-        self.log(
-            "INFO",
-            f"Model loaded: {load_result.get('status', 'Unknown')}"
-        )
-
-        # =====================================
-        # STEP 2 - VALIDATE MODEL
-        # =====================================
-
-        self.set_status("Validating model...")
-
-        validated = (
-            self.model_service.validate_model()
-        )
-
-        if not validated:
-            raise ValueError(
-                "Model validation failed"
-            )
-
-        self.log(
-            "SUCCESS",
-            "Model validation successful"
-        )
-
-        # =====================================
-        # STEP 3 - MODEL INFO
-        # =====================================
-
-        model_info = (
-            self.model_service.get_model_info()
-        )
-
-        validator = ResultValidator()
-
-        if hasattr(
-            validator,
-            "validate_model_info"
-        ):
-            validator.validate_model_info(
-                model_info
-            )
-
-        self.log(
-            "INFO",
-            "Model metadata retrieved"
-        )
-
-        # =====================================
-        # STEP 4 - DETECTION
-        # =====================================
-
-        self.set_status(
-            "Running detection engine..."
-        )
-
-        detection = (
-            self.detection_service.run_detection(
-                prompt
-            )
-        )
-
-        self.log(
-            "INFO",
-            "Detection completed"
-        )
-
-        # =====================================
-        # STEP 5 - ACTIVATION TRACKING
-        # =====================================
-
-        self.set_status(
-            "Running activation analysis..."
-        )
+        start_time = time.time()
 
         try:
-            activation = (
-                self.activation_service.analyze(
-                    self.model_service.loader
+
+            self.set_status(
+                "Loading Model..."
+            )
+
+            self.log(
+                "INFO",
+                "Starting model loading",
+            )
+
+            load_result = (
+                self.model_service.load_model(
+                    model_path
                 )
             )
 
             self.log(
                 "INFO",
-                "Activation tracking completed"
+                f"Load Result: {load_result}",
             )
+
+            self.set_status(
+                "Validating Model..."
+            )
+
+            validated = (
+                self.model_service.validate_model()
+            )
+
+            if not validated:
+
+                self.log(
+                    "ERROR",
+                    "Model validation failed",
+                )
+
+                raise ValueError(
+                    "Model validation failed"
+                )
+
+            self.log(
+                "SUCCESS",
+                "Model validation passed",
+            )
+
+            model_info = (
+                self.model_service.get_model_info()
+            )
+
+            self.set_status(
+                "Running Detection..."
+            )
+
+            self.log(
+                "INFO",
+                "Starting detection engine",
+            )
+
+            detection = (
+                self.detection_service.run_detection(
+                    "security scan"
+                )
+            )
+
+            self.log(
+                "SUCCESS",
+                "Detection completed",
+            )
+
+            activation = {}
+
+            try:
+
+                self.set_status(
+                    "Running Activation Tracking..."
+                )
+
+                self.log(
+                    "INFO",
+                    "Starting activation analysis",
+                )
+
+                activation = (
+                    self.activation_service.analyze(
+                        self.model_service.loader
+                    )
+                )
+
+                self.log(
+                    "SUCCESS",
+                    "Activation analysis completed",
+                )
+
+            except Exception as exc:
+
+                activation = {
+                    "statistics": {},
+                    "error": str(exc),
+                }
+
+                self.log(
+                    "WARNING",
+                    f"Activation analysis failed: {exc}",
+                )
+
+            self.set_status(
+                "Generating Report..."
+            )
+
+            result = ScanResult()
+
+            # -----------------------------
+            # Model Information
+            # -----------------------------
+
+            result.model.model_name = (
+                model_info
+                .get(
+                    "model_identity",
+                    {},
+                )
+                .get(
+                    "name",
+                    "Unknown Model",
+                )
+            )
+
+            result.model.model_path = (
+                model_info
+                .get(
+                    "model_identity",
+                    {},
+                )
+                .get(
+                    "local_path",
+                    "",
+                )
+            )
+
+            result.model.framework = (
+                model_info
+                .get(
+                    "tensor_properties",
+                    {},
+                )
+                .get(
+                    "framework",
+                    "Unknown",
+                )
+            )
+
+            result.model.architecture = (
+                model_info
+                .get(
+                    "architecture_details",
+                    {},
+                )
+                .get(
+                    "architecture",
+                    "Unknown",
+                )
+            )
+
+            result.model.layers = (
+                model_info
+                .get(
+                    "architecture_details",
+                    {},
+                )
+                .get(
+                    "layers_count",
+                    0,
+                )
+            )
+
+            # -----------------------------
+            # Detection Results
+            # -----------------------------
+
+            result.detection.threat_score = (
+                detection.get(
+                    "score",
+                    0,
+                )
+            )
+
+            result.detection.risk_level = (
+                detection.get(
+                    "risk_level",
+                    "Unknown",
+                )
+            )
+
+            result.detection.summary = str(
+                detection.get(
+                    "report",
+                    {},
+                )
+            )
+
+            recommendations = (
+                detection
+                .get(
+                    "report",
+                    {},
+                )
+                .get(
+                    "Recommendations",
+                    [],
+                )
+            )
+
+            result.detection.suspicious_prompts = (
+                recommendations
+            )
+
+            # -----------------------------
+            # Activation Results
+            # -----------------------------
+
+            statistics = (
+                activation.get(
+                    "statistics",
+                    {},
+                )
+            )
+
+            result.activation.neuron_information = (
+                statistics
+            )
+
+            result.activation.summary = (
+                f"{len(statistics)} layers analyzed"
+            )
+
+            result.activation.neurons_analyzed = (
+                len(statistics)
+            )
+
+            # -----------------------------
+            # Recommendation
+            # -----------------------------
+
+            if recommendations:
+
+                result.recommendation = (
+                    "\n".join(
+                        recommendations
+                    )
+                )
+
+            else:
+
+                result.recommendation = (
+                    "No recommendation available."
+                )
+
+            # -----------------------------
+            # Statistics
+            # -----------------------------
+
+            duration = round(
+                time.time() - start_time,
+                2,
+            )
+
+            result.statistics.duration_seconds = (
+                duration
+            )
+
+            result.statistics.stages_completed = (
+                7
+            )
+
+            result.statistics.overall_status = (
+                "SUCCESS"
+            )
+
+            # -----------------------------
+            # Validation
+            # -----------------------------
+
+            validator = ResultValidator()
+
+            if hasattr(
+                validator,
+                "validate",
+            ):
+                validator.validate(
+                    result
+                )
+
+            self.set_status(
+                "Scan Completed"
+            )
+
+            self.log(
+                "SUCCESS",
+                f"Scan completed in {duration} seconds",
+            )
+
+            return result
 
         except Exception as exc:
 
             self.log(
-                "WARNING",
-                f"Activation tracker unavailable: {exc}"
+                "ERROR",
+                str(exc),
             )
 
-            activation = {
-                "activations": {},
-                "statistics": {},
-            }
-
-        # =====================================
-        # STEP 6 - BUILD SCAN RESULT
-        # =====================================
-
-        result = ScanResult()
-
-        # ------------------------------
-        # Model Section
-        # ------------------------------
-
-        result.model.model_name = (
-            model_info["model_identity"]["name"]
-        )
-
-        result.model.model_path = (
-            model_info["model_identity"][
-                "local_path"
-            ]
-        )
-
-        result.model.framework = (
-            model_info["tensor_properties"][
-                "framework"
-            ]
-        )
-
-        result.model.architecture = (
-            model_info[
-                "architecture_details"
-            ]["architecture"]
-        )
-
-        result.model.layers = (
-            model_info[
-                "architecture_details"
-            ]["layers_count"]
-        )
-
-        result.model.file_size_mb = (
-            model_info[
-                "tensor_properties"
-            ]["disk_storage_gb"]
-            * 1024
-        )
-
-        # ------------------------------
-        # Detection Section
-        # ------------------------------
-
-        result.detection.threat_score = (
-            detection["score"]
-        )
-
-        result.detection.risk_level = (
-            detection["risk_level"]
-        )
-
-        result.detection.summary = (
-            str(
-                detection[
-                    "detailed_report"
-                ]
-            )
-        )
-
-        result.detection.suspicious_prompts = (
-            detection["report"]
-            .get(
-                "Recommendations",
-                []
-            )
-        )
-
-        # ------------------------------
-        # Activation Section
-        # ------------------------------
-
-        stats = activation.get(
-            "statistics",
-            {}
-        )
-
-        result.activation.neurons_analyzed = (
-            len(stats)
-        )
-
-        result.activation.dead_neurons = 0
-
-        result.activation.anomalous_activations = (
-            len(stats)
-        )
-
-        result.activation.summary = (
-            f"{len(stats)} layers analyzed"
-        )
-
-        result.activation.neuron_information = (
-            stats
-        )
-
-        # ------------------------------
-        # Statistics Section
-        # ------------------------------
-
-        result.statistics.duration_seconds = (
-            4.2
-        )
-
-        result.statistics.overall_status = (
-            "SAFE"
-            if result.detection.threat_score < 50
-            else "SUSPICIOUS"
-        )
-
-        result.statistics.stages_completed = 7
-
-        # ------------------------------
-        # Recommendations
-        # ------------------------------
-
-        recommendations = (
-            detection["report"]
-            .get(
-                "Recommendations",
-                []
-            )
-        )
-
-        if recommendations:
-            result.recommendation = "\n".join(
-                recommendations
-            )
-        else:
-            result.recommendation = (
-                "No recommendations available."
+            self.set_status(
+                "Scan Failed"
             )
 
-        self.log(
-            "SUCCESS",
-            "Scan pipeline completed successfully"
-        )
-
-        self.set_status(
-            "Scan completed successfully"
-        )
-
-        return result
+            raise
