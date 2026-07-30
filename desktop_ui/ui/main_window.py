@@ -4,6 +4,9 @@ from desktop_ui.controllers.integration_controller import (
     IntegrationController,
 )
 
+from desktop_ui.components.security_overview_card import (
+    SecurityOverviewCard,
+)
 
 from pathlib import Path
 
@@ -123,6 +126,7 @@ class MainWindow(QMainWindow):
         self._build_action_section()
         self._build_analysis_section()
         self._build_day6_overview_section()
+        self._build_security_overview_section()
         self._build_activity_section()
 
         self.logs_widget = LogsWidget()
@@ -200,6 +204,19 @@ class MainWindow(QMainWindow):
         self.overview_splitter.setStretchFactor(1, 1)
         self.overview_splitter.setSizes([500, 500])
         self.dashboard_layout.addWidget(self.overview_splitter)
+
+    def _build_security_overview_section(self):
+        
+        self.security_overview = SecurityOverviewCard()
+        self.security_overview.update_metrics(
+            total_scans=12,
+            average_score=37,
+            high_risk=2,
+            models_analyzed=12,
+            )
+        self.dashboard_layout.addWidget(
+            self.security_overview
+            )
 
     def _build_activity_section(self) -> None:
         self.activity_splitter = self._new_splitter()
