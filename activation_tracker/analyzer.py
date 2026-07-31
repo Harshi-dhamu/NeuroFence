@@ -249,3 +249,38 @@ class ActivationAnalyzer:
             )
 
         return report
+
+    @staticmethod
+    def rank_layers_by_activity(
+        activations,
+        threshold: float = 1e-5,
+    ):
+        """
+        Rank tracked layers based on neuron activity.
+        """
+
+        scores = ActivationAnalyzer.compute_layer_scores(
+            activations,
+            threshold,
+        )
+
+        ranking = []
+
+        for layer_name, info in scores.items():
+
+            ranking.append(
+                {
+                    "layer_name": layer_name,
+                    "layer_type": info["layer_type"],
+                    "activity_score": info["activity_score"],
+                    "active_neurons": info["active_neurons"],
+                    "dormant_neurons": info["dormant_neurons"],
+                }
+            )
+
+        ranking.sort(
+            key=lambda layer: layer["activity_score"],
+            reverse=True,
+        )
+
+        return ranking

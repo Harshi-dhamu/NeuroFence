@@ -120,6 +120,19 @@ class ActivationTracker:
             threshold,
     )
 
+    def rank_layers(
+        self,
+        threshold=1e-5,
+    ):
+        """
+        Rank tracked layers by activity.
+        """
+
+        return ActivationAnalyzer.rank_layers_by_activity(
+            self.get_activations(),
+            threshold,
+        )
+
     def compare_with(
         self,
         other_activations,
