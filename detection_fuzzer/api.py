@@ -16,6 +16,9 @@ from .scoring import (
 )
 from .report import generate_report
 
+# Detection History
+scan_history = []
+
 
 def calculate_score(prompt):
     """
@@ -54,7 +57,19 @@ def run_scan(prompt):
     Main API function.
     """
 
-    return generate_scan_report(prompt)
+    result = generate_scan_report(prompt)
+
+    # Save scan in history
+    scan_history.append(result)
+
+    return result
+
+def get_scan_history():
+    """
+    Returns all previously scanned results.
+    """
+
+    return scan_history
 
 
 if __name__ == "__main__":
