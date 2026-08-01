@@ -1,7 +1,7 @@
 """
 test_loader.py - Automated Testing Suite for NeuroFence ModelLoader
 Validates metadata calculations, configuration validation rules, 
-and memory profiling matrices using isolated unittest mocks.
+memory profiling matrices, and corrupted file detection using isolated unittest mocks.
 """
 
 import unittest
@@ -102,6 +102,19 @@ class TestModelLoaderSuite(unittest.TestCase):
         self.assertIn("is_validated", export_data)
         self.assertIn("verification_report", export_data)
         self.assertIn("memory_projection", export_data)
+
+    @patch("os.path.getsize")
+    @patch("os.walk")
+    @patch("model_loader.core.check_directory_exists")
+    def test_detect_corrupted_files(self, mock_exists, mock_walk, mock_getsize):
+        """Day 4: Validates detection of empty or corrupted model files."""
+        mock_exists.return_value = True
+        mock_walk.return_value = [("/mock/path", [], ["model.safetensors", "config.json"])]
+        mock_getsize.side_effect = [0, 1024]  # model.safetensors is zero-bytes
+
+        corrupted = self.loader.detect_corrupted_files()
+        self.assertIn("model.safetensors", corrupted)
+        self.assertTrue(self.loader.metadata["verification_report"]["corruption_detected"])
 
 
 if __name__ == "__main__":

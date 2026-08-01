@@ -1,12 +1,12 @@
 """
 model_loader/core.py
 Provides core functionality for model validation, sandboxing, memory projection,
-and metadata export features for NeuroFence.
+metadata export, and corrupted model detection for NeuroFence.
 """
 
-import json
 import os
-from typing import Any, Dict, Optional
+import json
+from typing import Dict, Any, Optional, List
 
 
 def check_directory_exists(path: str) -> bool:
@@ -14,9 +14,30 @@ def check_directory_exists(path: str) -> bool:
     return os.path.exists(path) and os.path.isdir(path)
 
 
+def check_file_corrupted(file_path: str) -> bool:
+    """
+    Checks if a model file is corrupted (non-existent, zero-bytes, or unreadable JSON).
+    """
+    if not os.path.exists(file_path):
+        return True
+    
+    # Check for empty/zero-byte files
+    if os.path.getsize(file_path) == 0:
+        return True
+
+    # If it's a JSON config, test readability
+    if file_path.endswith('.json'):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                json.load(f)
+        except Exception:
+            return True
+
+    return False
+
+
 class SandboxEnvironment:
     """Mock/Stub sandbox environment used for staging model loading safely."""
-
     def __init__(self, target_path: Optional[str] = None):
         self.target_path = target_path
 
@@ -31,28 +52,16 @@ class SandboxEnvironment:
 
 
 def calculate_memory_projection(
-    param_count: float, precision: str = "float16", overhead_factor: float = 1.2
+    param_count: float, 
+    precision: str = "float16", 
+    overhead_factor: float = 1.2
 ) -> Dict[str, Any]:
-    """Calculates estimated RAM/VRAM required to load an AI model.
-
-    :param param_count: Total parameter count (in billions or raw count).
-    :param precision: Precision format ('float32', 'float16', 'bfloat16', 'int8',
-      'int4').
-    :param overhead_factor: Safety buffer factor for KV-cache and overhead
-      (default 1.2).
-    :return: Dictionary containing calculated memory projections.
-    """
     bytes_per_param_map = {
-        "float32": 4.0,
-        "fp32": 4.0,
-        "float16": 2.0,
-        "fp16": 2.0,
-        "bfloat16": 2.0,
-        "bf16": 2.0,
-        "int8": 1.0,
-        "q8": 1.0,
-        "int4": 0.5,
-        "q4": 0.5,
+        "float32": 4.0, "fp32": 4.0,
+        "float16": 2.0, "fp16": 2.0,
+        "bfloat16": 2.0, "bf16": 2.0,
+        "int8": 1.0, "q8": 1.0,
+        "int4": 0.5, "q4": 0.5,
     }
 
     precision_clean = str(precision).strip().lower()
@@ -62,9 +71,9 @@ def calculate_memory_projection(
     base_memory_bytes = actual_params * bytes_per_param
     total_memory_bytes = base_memory_bytes * overhead_factor
 
-    base_gb = base_memory_bytes / (1024**3)
-    total_gb = total_memory_bytes / (1024**3)
-    total_mb = total_memory_bytes / (1024**2)
+    base_gb = base_memory_bytes / (1024 ** 3)
+    total_gb = total_memory_bytes / (1024 ** 3)
+    total_mb = total_memory_bytes / (1024 ** 2)
 
     return {
         "param_count": param_count,
@@ -77,36 +86,67 @@ def calculate_memory_projection(
 
 
 class ModelLoader:
-
     def __init__(self, model_path: Optional[str] = None):
         self.model_path = model_path
         self.is_validated: bool = False
+        self.corrupted_files: List[str] = []
         self.metadata: Dict[str, Any] = {
             "raw_config": {},
             "status": "uninitialized",
             "param_count": 0.0,
-            "verification_report": {"config_verified": False},
+            "verification_report": {
+                "config_verified": False,
+                "corruption_detected": False
+            }
         }
 
+    def detect_corrupted_files(self, path: Optional[str] = None) -> List[str]:
+        """
+        Day 4: Scans target path for empty weight files or unparseable JSON configs.
+        """
+        target_path = path or self.model_path
+        self.corrupted_files = []
+
+        if not target_path or not check_directory_exists(target_path):
+            return ["Directory not found"]
+
+        for root, _, files in os.walk(target_path):
+            for file in files:
+                if file.endswith(('.safetensors', '.bin', '.pt', '.json', '.gguf')):
+                    full_path = os.path.join(root, file)
+                    if check_file_corrupted(full_path):
+                        self.corrupted_files.append(file)
+
+        is_corrupted = len(self.corrupted_files) > 0
+        if "verification_report" not in self.metadata:
+            self.metadata["verification_report"] = {}
+        self.metadata["verification_report"]["corruption_detected"] = is_corrupted
+
+        return self.corrupted_files
+
     def scan_model_directory(self, path: Optional[str] = None) -> bool:
-        """Scans and validates existence of target model directory."""
+        """Scans directory and verifies integrity."""
         target_path = path or self.model_path
         if not target_path or not check_directory_exists(target_path):
             self.is_validated = False
             return False
+
+        corrupted = self.detect_corrupted_files(target_path)
+        if corrupted:
+            self.is_validated = False
+            return False
+
         self.is_validated = True
         return True
 
     def scan_directory(self, path: Optional[str] = None) -> bool:
-        """Alias for scan_model_directory."""
         return self.scan_model_directory(path)
 
     def verify_config_keys(self, required_keys: Optional[list] = None) -> bool:
-        """Verifies presence of required architectural parameters in config."""
         raw_cfg = self.metadata.get("raw_config", {})
         if required_keys is None:
             required_keys = ["hidden_size", "num_hidden_layers", "vocab_size"]
-
+            
         is_valid = bool(raw_cfg) and all(k in raw_cfg for k in required_keys)
         if "verification_report" not in self.metadata:
             self.metadata["verification_report"] = {}
@@ -114,14 +154,13 @@ class ModelLoader:
         return is_valid
 
     def estimate_parameter_count(self) -> float:
-        """Estimates model parameter count based on architectural configurations."""
         cfg = self.metadata.get("raw_config", {})
         hidden_size = cfg.get("hidden_size", 4096)
         num_layers = cfg.get("num_hidden_layers", 32)
         vocab_size = cfg.get("vocab_size", 32000)
         intermediate_size = cfg.get("intermediate_size", 11008)
-
-        attn_params = 4 * (hidden_size**2)
+        
+        attn_params = 4 * (hidden_size ** 2)
         mlp_params = 3 * hidden_size * intermediate_size
         embed_params = vocab_size * hidden_size
 
@@ -131,13 +170,12 @@ class ModelLoader:
         return estimated_in_billions
 
     def load_safely(self) -> Dict[str, str]:
-        """Safely initializes model in an isolated sandbox environment."""
         try:
             sandbox = SandboxEnvironment(self.model_path)
-
+            
             if hasattr(sandbox, "initialize_sandbox"):
                 sandbox.initialize_sandbox()
-
+            
             if hasattr(sandbox, "execute_safely"):
                 res = sandbox.execute_safely()
             else:
@@ -145,33 +183,24 @@ class ModelLoader:
 
             if not res or res == "Intercepted" or res == "failed":
                 return {"status": "Intercepted"}
-
+                
             return {"status": "SUCCESS"}
         except Exception as e:
             return {
                 "status": "Intercepted",
                 "message": "Security runtime failure",
-                "error_details": str(e),
+                "error_details": str(e)
             }
 
     def get_memory_projection(
-        self, param_count: Optional[float] = None, precision: str = "float16"
+        self, 
+        param_count: Optional[float] = None, 
+        precision: str = "float16"
     ) -> Dict[str, Any]:
-        """Day 2: Returns RAM/VRAM projection for the target model."""
-        if param_count is not None:
-            count = param_count
-        else:
-            count = (
-                self.metadata.get("param_count")
-                or self.estimate_parameter_count()
-            )
-
-        return calculate_memory_projection(
-            param_count=count, precision=precision
-        )
+        count = param_count or self.metadata.get("param_count", 0) or self.estimate_parameter_count()
+        return calculate_memory_projection(param_count=count, precision=precision)
 
     def export_metadata(self) -> Dict[str, Any]:
-        """Day 3: Exports consolidated model metadata dictionary."""
         projection = self.get_memory_projection()
         return {
             "model_path": self.model_path,
@@ -180,12 +209,10 @@ class ModelLoader:
             "verification_report": self.metadata.get("verification_report", {}),
             "memory_projection": projection,
             "status": self.metadata.get("status", "uninitialized"),
+            "corrupted_files": self.corrupted_files
         }
 
-    def export_metadata_to_file(
-        self, output_path: str = "model_metadata.json"
-    ) -> bool:
-        """Day 3: Saves exported metadata dictionary into a formatted JSON file."""
+    def export_metadata_to_file(self, output_path: str = "model_metadata.json") -> bool:
         try:
             data = self.export_metadata()
             with open(output_path, "w", encoding="utf-8") as f:
