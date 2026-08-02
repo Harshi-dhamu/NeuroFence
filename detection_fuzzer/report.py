@@ -22,6 +22,12 @@ def generate_report(prompt, threat_score, severity, confidence, risk_level):
             "Threat Score": threat_score,
             "Severity": severity,
             "Confidence": f"{confidence}%",
+            "Confidence Value": confidence,
+            "Confidence Status": (
+                "High" if confidence >= 80
+                else "Medium" if confidence >= 50
+                else "Low"
+            ),
             "Risk Level": risk_level
         },
         "Recommendations": []
