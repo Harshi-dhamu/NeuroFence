@@ -1,11 +1,12 @@
 """
 model_loader/core.py
 Provides core functionality for model validation, sandboxing, memory projection,
-metadata export, and corrupted model detection for NeuroFence.
+metadata export, corrupted model detection, and performance tracking for NeuroFence.
 """
 
 import os
 import json
+import time
 from typing import Dict, Any, Optional, List
 
 
@@ -90,6 +91,12 @@ class ModelLoader:
         self.model_path = model_path
         self.is_validated: bool = False
         self.corrupted_files: List[str] = []
+        self.performance_metrics: Dict[str, float] = {
+            "scan_time_ms": 0.0,
+            "verification_time_ms": 0.0,
+            "load_time_ms": 0.0,
+            "total_execution_time_ms": 0.0
+        }
         self.metadata: Dict[str, Any] = {
             "raw_config": {},
             "status": "uninitialized",
@@ -101,9 +108,6 @@ class ModelLoader:
         }
 
     def detect_corrupted_files(self, path: Optional[str] = None) -> List[str]:
-        """
-        Day 4: Scans target path for empty weight files or unparseable JSON configs.
-        """
         target_path = path or self.model_path
         self.corrupted_files = []
 
@@ -125,24 +129,29 @@ class ModelLoader:
         return self.corrupted_files
 
     def scan_model_directory(self, path: Optional[str] = None) -> bool:
-        """Scans directory and verifies integrity."""
+        start_time = time.perf_counter()
         target_path = path or self.model_path
+        
         if not target_path or not check_directory_exists(target_path):
             self.is_validated = False
+            self.performance_metrics["scan_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
             return False
 
         corrupted = self.detect_corrupted_files(target_path)
         if corrupted:
             self.is_validated = False
+            self.performance_metrics["scan_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
             return False
 
         self.is_validated = True
+        self.performance_metrics["scan_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
         return True
 
     def scan_directory(self, path: Optional[str] = None) -> bool:
         return self.scan_model_directory(path)
 
     def verify_config_keys(self, required_keys: Optional[list] = None) -> bool:
+        start_time = time.perf_counter()
         raw_cfg = self.metadata.get("raw_config", {})
         if required_keys is None:
             required_keys = ["hidden_size", "num_hidden_layers", "vocab_size"]
@@ -151,6 +160,8 @@ class ModelLoader:
         if "verification_report" not in self.metadata:
             self.metadata["verification_report"] = {}
         self.metadata["verification_report"]["config_verified"] = is_valid
+        
+        self.performance_metrics["verification_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
         return is_valid
 
     def estimate_parameter_count(self) -> float:
@@ -170,6 +181,7 @@ class ModelLoader:
         return estimated_in_billions
 
     def load_safely(self) -> Dict[str, str]:
+        start_time = time.perf_counter()
         try:
             sandbox = SandboxEnvironment(self.model_path)
             
@@ -181,11 +193,16 @@ class ModelLoader:
             else:
                 res = sandbox.run("load")
 
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 3)
+            self.performance_metrics["load_time_ms"] = elapsed_ms
+
             if not res or res == "Intercepted" or res == "failed":
                 return {"status": "Intercepted"}
                 
             return {"status": "SUCCESS"}
         except Exception as e:
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000, 3)
+            self.performance_metrics["load_time_ms"] = elapsed_ms
             return {
                 "status": "Intercepted",
                 "message": "Security runtime failure",
@@ -200,14 +217,27 @@ class ModelLoader:
         count = param_count or self.metadata.get("param_count", 0) or self.estimate_parameter_count()
         return calculate_memory_projection(param_count=count, precision=precision)
 
+    def get_performance_metrics(self) -> Dict[str, float]:
+        """Day 5: Returns aggregated timing metrics across execution pipeline stages."""
+        self.performance_metrics["total_execution_time_ms"] = round(
+            sum([
+                self.performance_metrics.get("scan_time_ms", 0.0),
+                self.performance_metrics.get("verification_time_ms", 0.0),
+                self.performance_metrics.get("load_time_ms", 0.0)
+            ]), 3
+        )
+        return self.performance_metrics
+
     def export_metadata(self) -> Dict[str, Any]:
         projection = self.get_memory_projection()
+        metrics = self.get_performance_metrics()
         return {
             "model_path": self.model_path,
             "is_validated": self.is_validated,
             "param_count_billions": self.metadata.get("param_count", 0),
             "verification_report": self.metadata.get("verification_report", {}),
             "memory_projection": projection,
+            "performance_metrics": metrics,
             "status": self.metadata.get("status", "uninitialized"),
             "corrupted_files": self.corrupted_files
         }

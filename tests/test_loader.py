@@ -1,7 +1,7 @@
 """
 test_loader.py - Automated Testing Suite for NeuroFence ModelLoader
 Validates metadata calculations, configuration validation rules, 
-memory profiling matrices, and corrupted file detection using isolated unittest mocks.
+memory profiling matrices, corrupted file detection, and performance tracking.
 """
 
 import unittest
@@ -102,6 +102,7 @@ class TestModelLoaderSuite(unittest.TestCase):
         self.assertIn("is_validated", export_data)
         self.assertIn("verification_report", export_data)
         self.assertIn("memory_projection", export_data)
+        self.assertIn("performance_metrics", export_data)
 
     @patch("os.path.getsize")
     @patch("os.walk")
@@ -110,11 +111,23 @@ class TestModelLoaderSuite(unittest.TestCase):
         """Day 4: Validates detection of empty or corrupted model files."""
         mock_exists.return_value = True
         mock_walk.return_value = [("/mock/path", [], ["model.safetensors", "config.json"])]
-        mock_getsize.side_effect = [0, 1024]  # model.safetensors is zero-bytes
+        mock_getsize.side_effect = [0, 1024]
 
         corrupted = self.loader.detect_corrupted_files()
         self.assertIn("model.safetensors", corrupted)
         self.assertTrue(self.loader.metadata["verification_report"]["corruption_detected"])
+
+    def test_performance_metrics_tracking(self):
+        """Day 5: Ensures performance metrics track latency correctly across stages."""
+        self.loader.verify_config_keys()
+        self.loader.load_safely()
+        metrics = self.loader.get_performance_metrics()
+
+        self.assertIn("scan_time_ms", metrics)
+        self.assertIn("verification_time_ms", metrics)
+        self.assertIn("load_time_ms", metrics)
+        self.assertIn("total_execution_time_ms", metrics)
+        self.assertGreaterEqual(metrics["total_execution_time_ms"], 0.0)
 
 
 if __name__ == "__main__":
