@@ -111,6 +111,17 @@ class ActivationTracker:
         return ActivationAnalyzer.prepare_heatmap_data(
             self.get_activations()
         )
+
+    def get_normalized_heatmap_data(self):
+        """
+        Return normalized heatmap-ready activation data.
+        """
+
+        return ActivationAnalyzer.prepare_normalized_heatmap_data(
+            self.get_activations()
+        )
+
+
     
     def get_layer_scores(self, threshold=1e-5):
         """Return activity scores for every tracked layer."""

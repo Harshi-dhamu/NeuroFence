@@ -119,6 +119,36 @@ class ActivationAnalyzer:
             )
 
         return heatmaps
+
+    @staticmethod
+    def prepare_normalized_heatmap_data(activations):
+        """
+        Prepare normalized activation matrices for heatmap visualization.
+        Values are scaled between 0 and 1.
+        """
+
+        heatmaps = {}
+
+        for layer_name, info in activations.items():
+
+            tensor = info["activation"].float()
+
+            minimum = tensor.min()
+            maximum = tensor.max()
+
+            if maximum == minimum:
+                normalized = torch.zeros_like(tensor)
+            else:
+                normalized = (
+                    (tensor - minimum)
+                    / (maximum - minimum)
+                )
+
+            heatmaps[layer_name] = normalized.tolist()
+
+        return heatmaps
+
+
     
     @staticmethod
     def compute_layer_scores(
