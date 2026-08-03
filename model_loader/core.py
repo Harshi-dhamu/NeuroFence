@@ -1,7 +1,8 @@
 """
 model_loader/core.py
 Provides core functionality for model validation, sandboxing, memory projection,
-metadata export, corrupted model detection, and performance tracking for NeuroFence.
+metadata export, corrupted model detection, performance tracking, and large model
+sharding support for NeuroFence.
 """
 
 import os
@@ -16,17 +17,13 @@ def check_directory_exists(path: str) -> bool:
 
 
 def check_file_corrupted(file_path: str) -> bool:
-    """
-    Checks if a model file is corrupted (non-existent, zero-bytes, or unreadable JSON).
-    """
+    """Checks if a model file is corrupted (non-existent, zero-bytes, or unreadable JSON)."""
     if not os.path.exists(file_path):
         return True
     
-    # Check for empty/zero-byte files
     if os.path.getsize(file_path) == 0:
         return True
 
-    # If it's a JSON config, test readability
     if file_path.endswith('.json'):
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -91,6 +88,8 @@ class ModelLoader:
         self.model_path = model_path
         self.is_validated: bool = False
         self.corrupted_files: List[str] = []
+        self.shards: List[str] = []
+        self.is_sharded: bool = False
         self.performance_metrics: Dict[str, float] = {
             "scan_time_ms": 0.0,
             "verification_time_ms": 0.0,
@@ -103,9 +102,32 @@ class ModelLoader:
             "param_count": 0.0,
             "verification_report": {
                 "config_verified": False,
-                "corruption_detected": False
+                "corruption_detected": False,
+                "is_sharded": False
             }
         }
+
+    def detect_model_shards(self, path: Optional[str] = None) -> List[str]:
+        """
+        Day 6: Detects multi-file sharded weights (e.g. model-00001-of-00003.safetensors).
+        """
+        target_path = path or self.model_path
+        self.shards = []
+
+        if not target_path or not check_directory_exists(target_path):
+            return []
+
+        for root, _, files in os.walk(target_path):
+            for file in files:
+                if "of-" in file.lower() and file.endswith(('.safetensors', '.bin', '.pt', '.gguf')):
+                    self.shards.append(file)
+
+        self.is_sharded = len(self.shards) > 0
+        if "verification_report" not in self.metadata:
+            self.metadata["verification_report"] = {}
+        self.metadata["verification_report"]["is_sharded"] = self.is_sharded
+
+        return self.shards
 
     def detect_corrupted_files(self, path: Optional[str] = None) -> List[str]:
         target_path = path or self.model_path
@@ -143,6 +165,7 @@ class ModelLoader:
             self.performance_metrics["scan_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
             return False
 
+        self.detect_model_shards(target_path)
         self.is_validated = True
         self.performance_metrics["scan_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
         return True
@@ -218,7 +241,6 @@ class ModelLoader:
         return calculate_memory_projection(param_count=count, precision=precision)
 
     def get_performance_metrics(self) -> Dict[str, float]:
-        """Day 5: Returns aggregated timing metrics across execution pipeline stages."""
         self.performance_metrics["total_execution_time_ms"] = round(
             sum([
                 self.performance_metrics.get("scan_time_ms", 0.0),
@@ -234,6 +256,8 @@ class ModelLoader:
         return {
             "model_path": self.model_path,
             "is_validated": self.is_validated,
+            "is_sharded": self.is_sharded,
+            "shard_files": self.shards,
             "param_count_billions": self.metadata.get("param_count", 0),
             "verification_report": self.metadata.get("verification_report", {}),
             "memory_projection": projection,

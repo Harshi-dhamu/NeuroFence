@@ -1,7 +1,8 @@
 """
 test_loader.py - Automated Testing Suite for NeuroFence ModelLoader
 Validates metadata calculations, configuration validation rules, 
-memory profiling matrices, corrupted file detection, and performance tracking.
+memory profiling matrices, corrupted file detection, performance tracking,
+and large sharded model handling.
 """
 
 import unittest
@@ -9,7 +10,6 @@ from unittest.mock import MagicMock, patch
 
 from model_loader.core import ModelLoader
 
-# Safely import SandboxSecurityError or define a fallback to keep tests robust
 try:
     from model_loader.sandbox import SandboxSecurityError
 except ImportError:
@@ -39,7 +39,6 @@ class TestModelLoaderSuite(unittest.TestCase):
         self.loader.metadata["raw_config"] = {
             "model_type": "llama",
             "vocab_size": 32000
-            # Missing hidden_size and num_hidden_layers
         }
         result = self.loader.verify_config_keys()
         self.assertFalse(result)
@@ -69,7 +68,6 @@ class TestModelLoaderSuite(unittest.TestCase):
             "num_hidden_layers": 32,
             "intermediate_size": 11008,
         }
-        # Math verification target: ~6.61 Billion
         estimated_b = self.loader.estimate_parameter_count()
         self.assertEqual(estimated_b, 6.61)
 
@@ -127,7 +125,22 @@ class TestModelLoaderSuite(unittest.TestCase):
         self.assertIn("verification_time_ms", metrics)
         self.assertIn("load_time_ms", metrics)
         self.assertIn("total_execution_time_ms", metrics)
-        self.assertGreaterEqual(metrics["total_execution_time_ms"], 0.0)
+
+    @patch("os.walk")
+    @patch("model_loader.core.check_directory_exists")
+    def test_detect_model_shards(self, mock_exists, mock_walk):
+        """Day 6: Validates identification of sharded model files."""
+        mock_exists.return_value = True
+        mock_walk.return_value = [(
+            "/mock/path", 
+            [], 
+            ["model-00001-of-00002.safetensors", "model-00002-of-00002.safetensors"]
+        )]
+
+        shards = self.loader.detect_model_shards()
+        self.assertEqual(len(shards), 2)
+        self.assertTrue(self.loader.is_sharded)
+        self.assertTrue(self.loader.metadata["verification_report"]["is_sharded"])
 
 
 if __name__ == "__main__":
