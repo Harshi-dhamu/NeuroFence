@@ -18,7 +18,7 @@ class HookManager:
     def __init__(self):
         self.handles = []
         self.activations: Dict[str, Dict[str, Any]] = {}
-
+        self.activation_history = []
     def _hook_fn(self, layer_name):
         """
         Create a forward hook callback for a specific layer.
@@ -86,3 +86,24 @@ class HookManager:
         """
 
         return self.activations
+
+
+    def save_activation_snapshot(self):
+        """
+        Save a snapshot of the current activations.
+        """
+
+        if self.activations:
+
+            snapshot = {}
+
+            for layer, info in self.activations.items():
+
+                snapshot[layer] = {
+                    "layer_type": info["layer_type"],
+                    "shape": info["shape"],
+                    "dtype": info["dtype"],
+                    "activation": info["activation"].clone(),
+                }
+
+            self.activation_history.append(snapshot)

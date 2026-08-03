@@ -194,8 +194,9 @@ class ActivationTracker:
 
         self.model(input_tensor)
 
-        self.stop_tracking()
+        self.hook_manager.save_activation_snapshot()
 
+        self.stop_tracking()
         return self.get_activations()
     
     def export_all(self, folder="activations"):
@@ -221,3 +222,10 @@ class ActivationTracker:
         """
 
         return self.analyze_neuron_activity(threshold)
+
+    def get_activation_history(self):
+        """
+        Return all stored activation snapshots.
+        """
+
+        return self.hook_manager.activation_history
