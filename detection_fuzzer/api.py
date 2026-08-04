@@ -111,6 +111,50 @@ def get_risk_trend():
     return trend
 
 
+# ==========================
+# Day 7 - Detection Templates
+# ==========================
+def get_detection_templates():
+    """
+    Returns predefined detection templates.
+    """
+
+    templates = [
+        {
+            "Template": "Prompt Injection",
+            "Severity": "High",
+            "Risk Level": "High"
+        },
+        {
+            "Template": "SQL Injection",
+            "Severity": "Critical",
+            "Risk Level": "Very High"
+        },
+        {
+            "Template": "API Key Leakage",
+            "Severity": "Medium",
+            "Risk Level": "Medium"
+        },
+        {
+            "Template": "Sensitive Data Exposure",
+            "Severity": "High",
+            "Risk Level": "High"
+        },
+        {
+            "Template": "Malicious Prompt",
+            "Severity": "Critical",
+            "Risk Level": "Very High"
+        },
+        {
+            "Template": "Safe Prompt",
+            "Severity": "Safe",
+            "Risk Level": "Minimal"
+        }
+    ]
+
+    return templates
+
+
 if __name__ == "__main__":
 
     sample_prompts = [
@@ -131,9 +175,9 @@ if __name__ == "__main__":
 
     print("\nTotal History Stored:", len(get_scan_history()))
 
-    # ==========================
-    # Risk Trend Analysis
-    # ==========================
+    # -------------------------
+    # Day 6 Output
+    # -------------------------
     print("\nRisk Trend Analysis")
     print("=" * 60)
 
@@ -141,3 +185,14 @@ if __name__ == "__main__":
 
     for level, count in trend.items():
         print(f"{level}: {count}")
+
+    # -------------------------
+    # Day 7 Output
+    # -------------------------
+    print("\nDetection Templates")
+    print("=" * 60)
+
+    templates = get_detection_templates()
+
+    for template in templates:
+        print(template)
