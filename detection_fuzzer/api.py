@@ -59,7 +59,6 @@ def run_scan(prompt):
 
     result = generate_scan_report(prompt)
 
-    # Save scan in history
     scan_history.append(result)
 
     return result
@@ -75,7 +74,7 @@ def get_scan_history():
 
 def run_batch_scan(prompts):
     """
-    Scan multiple prompts and return all results.
+    Scan multiple prompts.
     """
 
     results = []
@@ -87,12 +86,11 @@ def run_batch_scan(prompts):
 
 
 # ==========================
-# Day 6 - Risk Trend Analysis
+# Day 6
+# Risk Trend Analysis
 # ==========================
+
 def get_risk_trend():
-    """
-    Returns risk trend summary from scan history.
-    """
 
     trend = {
         "Very High": 0,
@@ -103,6 +101,7 @@ def get_risk_trend():
     }
 
     for scan in scan_history:
+
         risk = scan["Threat Summary"]["Risk Level"]
 
         if risk in trend:
@@ -112,12 +111,11 @@ def get_risk_trend():
 
 
 # ==========================
-# Day 7 - Detection Templates
+# Day 7
+# Detection Templates
 # ==========================
+
 def get_detection_templates():
-    """
-    Returns predefined detection templates.
-    """
 
     templates = [
         {
@@ -155,6 +153,31 @@ def get_detection_templates():
     return templates
 
 
+# ==========================
+# Day 8
+# Severity Dashboard
+# ==========================
+
+def get_severity_dashboard():
+
+    dashboard = {
+        "Critical": 0,
+        "High": 0,
+        "Medium": 0,
+        "Low": 0,
+        "Safe": 0
+    }
+
+    for scan in scan_history:
+
+        severity = scan["Threat Summary"]["Severity"]
+
+        if severity in dashboard:
+            dashboard[severity] += 1
+
+    return dashboard
+
+
 if __name__ == "__main__":
 
     sample_prompts = [
@@ -170,14 +193,16 @@ if __name__ == "__main__":
     print("=" * 60)
 
     for i, result in enumerate(batch_results, 1):
+
         print(f"\nPrompt {i}")
         print(result)
 
     print("\nTotal History Stored:", len(get_scan_history()))
 
-    # -------------------------
-    # Day 6 Output
-    # -------------------------
+    # ------------------------
+    # Risk Trend
+    # ------------------------
+
     print("\nRisk Trend Analysis")
     print("=" * 60)
 
@@ -186,9 +211,10 @@ if __name__ == "__main__":
     for level, count in trend.items():
         print(f"{level}: {count}")
 
-    # -------------------------
-    # Day 7 Output
-    # -------------------------
+    # ------------------------
+    # Detection Templates
+    # ------------------------
+
     print("\nDetection Templates")
     print("=" * 60)
 
@@ -196,3 +222,15 @@ if __name__ == "__main__":
 
     for template in templates:
         print(template)
+
+    # ------------------------
+    # Severity Dashboard
+    # ------------------------
+
+    print("\nSeverity Dashboard Metrics")
+    print("=" * 60)
+
+    dashboard = get_severity_dashboard()
+
+    for severity, count in dashboard.items():
+        print(f"{severity}: {count}")
