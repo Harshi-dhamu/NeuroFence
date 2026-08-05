@@ -2,14 +2,13 @@
 test_loader.py - Automated Testing Suite for NeuroFence ModelLoader
 Validates metadata calculations, configuration validation rules, 
 memory profiling matrices, corrupted file detection, performance tracking,
-large sharded model handling, and validation report exporting.
+large sharded model handling, validation report exporting, and metadata caching.
 """
 
-import os
 import unittest
 from unittest.mock import MagicMock, patch
 
-from model_loader.core import ModelLoader
+from model_loader.core import ModelLoader, clear_metadata_cache
 
 try:
     from model_loader.sandbox import SandboxSecurityError
@@ -24,6 +23,7 @@ class TestModelLoaderSuite(unittest.TestCase):
 
     def setUp(self):
         """Initializes a base ModelLoader instance pointed to a dummy directory path."""
+        clear_metadata_cache()
         self.dummy_path = "/mock/path/to/llm-model"
         self.loader = ModelLoader(self.dummy_path)
 
@@ -150,6 +150,23 @@ class TestModelLoaderSuite(unittest.TestCase):
 
         success = self.loader.export_validation_report("test_report.json")
         self.assertTrue(success)
+
+    @patch("os.walk")
+    @patch("model_loader.core.check_directory_exists")
+    def test_metadata_caching(self, mock_exists, mock_walk):
+        """Day 8: Validates metadata caching mechanism on repeated directory scans."""
+        mock_exists.return_value = True
+        mock_walk.return_value = [("/mock/path", [], ["model.safetensors"])]
+
+        # First scan - should populate cache
+        loader1 = ModelLoader(self.dummy_path)
+        loader1.scan_model_directory()
+        self.assertFalse(loader1.from_cache)
+
+        # Second scan - should retrieve from cache
+        loader2 = ModelLoader(self.dummy_path)
+        loader2.scan_model_directory()
+        self.assertTrue(loader2.from_cache)
 
 
 if __name__ == "__main__":
