@@ -1,8 +1,8 @@
 """
 model_loader/core.py
 Provides core functionality for model validation, sandboxing, memory projection,
-metadata export, corrupted model detection, performance tracking, and large model
-sharding support for NeuroFence.
+metadata export, corrupted model detection, performance tracking, large model
+sharding support, and validation report export for NeuroFence.
 """
 
 import os
@@ -108,9 +108,6 @@ class ModelLoader:
         }
 
     def detect_model_shards(self, path: Optional[str] = None) -> List[str]:
-        """
-        Day 6: Detects multi-file sharded weights (e.g. model-00001-of-00003.safetensors).
-        """
         target_path = path or self.model_path
         self.shards = []
 
@@ -250,28 +247,43 @@ class ModelLoader:
         )
         return self.performance_metrics
 
-    def export_metadata(self) -> Dict[str, Any]:
+    def generate_validation_report(self) -> Dict[str, Any]:
+        """
+        Day 7: Generates a full structured validation report summarizing all audit checks.
+        """
         projection = self.get_memory_projection()
         metrics = self.get_performance_metrics()
+        report_status = "PASS" if self.is_validated and not self.corrupted_files else "FAIL"
+
         return {
-            "model_path": self.model_path,
+            "validation_status": report_status,
+            "target_model_path": self.model_path,
             "is_validated": self.is_validated,
             "is_sharded": self.is_sharded,
-            "shard_files": self.shards,
-            "param_count_billions": self.metadata.get("param_count", 0),
-            "verification_report": self.metadata.get("verification_report", {}),
-            "memory_projection": projection,
-            "performance_metrics": metrics,
-            "status": self.metadata.get("status", "uninitialized"),
-            "corrupted_files": self.corrupted_files
+            "shard_count": len(self.shards),
+            "corrupted_files_count": len(self.corrupted_files),
+            "corrupted_files": self.corrupted_files,
+            "verification_checks": self.metadata.get("verification_report", {}),
+            "estimated_parameters_b": self.metadata.get("param_count", 0.0),
+            "memory_requirements": projection,
+            "performance_latency": metrics,
         }
 
-    def export_metadata_to_file(self, output_path: str = "model_metadata.json") -> bool:
+    def export_validation_report(self, output_path: str = "validation_report.json") -> bool:
+        """
+        Day 7: Writes the generated validation report to a JSON disk file.
+        """
         try:
-            data = self.export_metadata()
+            report_data = self.generate_validation_report()
             with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=4)
+                json.dump(report_data, f, indent=4)
             return True
         except Exception as e:
-            print(f"Error exporting metadata to file: {e}")
+            print(f"Failed to export validation report: {e}")
             return False
+
+    def export_metadata(self) -> Dict[str, Any]:
+        return self.generate_validation_report()
+
+    def export_metadata_to_file(self, output_path: str = "model_metadata.json") -> bool:
+        return self.export_validation_report(output_path)

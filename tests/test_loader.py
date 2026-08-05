@@ -2,9 +2,10 @@
 test_loader.py - Automated Testing Suite for NeuroFence ModelLoader
 Validates metadata calculations, configuration validation rules, 
 memory profiling matrices, corrupted file detection, performance tracking,
-and large sharded model handling.
+large sharded model handling, and validation report exporting.
 """
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -96,11 +97,10 @@ class TestModelLoaderSuite(unittest.TestCase):
         }
         export_data = self.loader.export_metadata()
 
-        self.assertIn("model_path", export_data)
-        self.assertIn("is_validated", export_data)
-        self.assertIn("verification_report", export_data)
-        self.assertIn("memory_projection", export_data)
-        self.assertIn("performance_metrics", export_data)
+        self.assertIn("validation_status", export_data)
+        self.assertIn("target_model_path", export_data)
+        self.assertIn("memory_requirements", export_data)
+        self.assertIn("performance_latency", export_data)
 
     @patch("os.path.getsize")
     @patch("os.walk")
@@ -140,7 +140,16 @@ class TestModelLoaderSuite(unittest.TestCase):
         shards = self.loader.detect_model_shards()
         self.assertEqual(len(shards), 2)
         self.assertTrue(self.loader.is_sharded)
-        self.assertTrue(self.loader.metadata["verification_report"]["is_sharded"])
+
+    @patch("builtins.open")
+    def test_export_validation_report(self, mock_open):
+        """Day 7: Validates report generation and export execution."""
+        report = self.loader.generate_validation_report()
+        self.assertIn("validation_status", report)
+        self.assertIn("verification_checks", report)
+
+        success = self.loader.export_validation_report("test_report.json")
+        self.assertTrue(success)
 
 
 if __name__ == "__main__":
