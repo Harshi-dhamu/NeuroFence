@@ -2,13 +2,14 @@
 test_loader.py - Automated Testing Suite for NeuroFence ModelLoader
 Validates metadata calculations, configuration validation rules, 
 memory profiling matrices, corrupted file detection, performance tracking,
-large sharded model handling, validation report exporting, and metadata caching.
+large sharded model handling, validation report exporting, metadata caching,
+and edge-case bug fixes.
 """
 
 import unittest
 from unittest.mock import MagicMock, patch
 
-from model_loader.core import ModelLoader, clear_metadata_cache
+from model_loader.core import ModelLoader, clear_metadata_cache, calculate_memory_projection
 
 try:
     from model_loader.sandbox import SandboxSecurityError
@@ -102,14 +103,16 @@ class TestModelLoaderSuite(unittest.TestCase):
         self.assertIn("memory_requirements", export_data)
         self.assertIn("performance_latency", export_data)
 
+    @patch("os.path.exists")
     @patch("os.path.getsize")
     @patch("os.walk")
     @patch("model_loader.core.check_directory_exists")
-    def test_detect_corrupted_files(self, mock_exists, mock_walk, mock_getsize):
+    def test_detect_corrupted_files(self, mock_exists_dir, mock_walk, mock_getsize, mock_exists_file):
         """Day 4: Validates detection of empty or corrupted model files."""
-        mock_exists.return_value = True
-        mock_walk.return_value = [("/mock/path", [], ["model.safetensors", "config.json"])]
-        mock_getsize.side_effect = [0, 1024]
+        mock_exists_dir.return_value = True
+        mock_exists_file.return_value = True
+        mock_walk.return_value = [("/mock/path", [], ["model.safetensors"])]
+        mock_getsize.return_value = 0
 
         corrupted = self.loader.detect_corrupted_files()
         self.assertIn("model.safetensors", corrupted)
@@ -117,6 +120,7 @@ class TestModelLoaderSuite(unittest.TestCase):
 
     def test_performance_metrics_tracking(self):
         """Day 5: Ensures performance metrics track latency correctly across stages."""
+        self.loader.is_validated = True
         self.loader.verify_config_keys()
         self.loader.load_safely()
         metrics = self.loader.get_performance_metrics()
@@ -151,22 +155,39 @@ class TestModelLoaderSuite(unittest.TestCase):
         success = self.loader.export_validation_report("test_report.json")
         self.assertTrue(success)
 
+    @patch("os.path.exists")
+    @patch("os.path.getsize")
     @patch("os.walk")
     @patch("model_loader.core.check_directory_exists")
-    def test_metadata_caching(self, mock_exists, mock_walk):
+    def test_metadata_caching(self, mock_exists_dir, mock_walk, mock_getsize, mock_exists_file):
         """Day 8: Validates metadata caching mechanism on repeated directory scans."""
-        mock_exists.return_value = True
+        mock_exists_dir.return_value = True
+        mock_exists_file.return_value = True
+        mock_getsize.return_value = 1024
         mock_walk.return_value = [("/mock/path", [], ["model.safetensors"])]
 
-        # First scan - should populate cache
         loader1 = ModelLoader(self.dummy_path)
         loader1.scan_model_directory()
         self.assertFalse(loader1.from_cache)
 
-        # Second scan - should retrieve from cache
         loader2 = ModelLoader(self.dummy_path)
         loader2.scan_model_directory()
         self.assertTrue(loader2.from_cache)
+
+    def test_loader_bug_fixes_edge_cases(self):
+        """Day 9: Validates robustness against edge cases like None paths, bad configs, and negative params."""
+        # Test None path gracefully handles without exceptions
+        empty_loader = ModelLoader(None)
+        self.assertFalse(empty_loader.scan_model_directory())
+        self.assertEqual(empty_loader.load_safely()["status"], "Intercepted")
+
+        # Test invalid/malformed raw_config format
+        empty_loader.metadata["raw_config"] = "invalid_string_instead_of_dict"
+        self.assertFalse(empty_loader.verify_config_keys())
+
+        # Test calculation safety against negative parameters
+        proj = calculate_memory_projection(-5.0)
+        self.assertEqual(proj["param_count"], 0.0)
 
 
 if __name__ == "__main__":

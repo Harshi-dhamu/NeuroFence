@@ -2,14 +2,13 @@
 model_loader/core.py
 Provides core functionality for model validation, sandboxing, memory projection,
 metadata export, corrupted model detection, performance tracking, large model
-sharding support, validation report export, and metadata caching for NeuroFence.
+sharding support, validation report export, metadata caching, and bug fixes for NeuroFence.
 """
 
-import copy
-import json
 import os
+import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, Any, Optional, List
 
 # Global in-memory cache for model metadata
 _METADATA_CACHE: Dict[str, Dict[str, Any]] = {}
@@ -22,15 +21,17 @@ def clear_metadata_cache() -> None:
 
 
 def check_directory_exists(path: Optional[str]) -> bool:
-    """Helper function to check if a directory exists."""
-    return bool(path) and os.path.exists(path) and os.path.isdir(path)
+    """Helper function to safely check if a directory exists."""
+    if not path or not isinstance(path, str):
+        return False
+    return os.path.exists(path) and os.path.isdir(path)
 
 
 def check_file_corrupted(file_path: str) -> bool:
     """Checks if a model file is corrupted (non-existent, zero-bytes, or unreadable JSON)."""
-    if not os.path.exists(file_path):
+    if not file_path or not os.path.exists(file_path):
         return True
-
+    
     try:
         if os.path.getsize(file_path) == 0:
             return True
@@ -41,7 +42,7 @@ def check_file_corrupted(file_path: str) -> bool:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 json.load(f)
-        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+        except Exception:
             return True
 
     return False
@@ -63,10 +64,14 @@ class SandboxEnvironment:
 
 
 def calculate_memory_projection(
-    param_count: Optional[float], 
+    param_count: float, 
     precision: str = "float16", 
     overhead_factor: float = 1.2
 ) -> Dict[str, Any]:
+    # Bug Fix: Ensure non-negative param count and overhead factor
+    param_count = max(0.0, float(param_count or 0.0))
+    overhead_factor = max(1.0, float(overhead_factor or 1.2))
+
     bytes_per_param_map = {
         "float32": 4.0, "fp32": 4.0,
         "float16": 2.0, "fp16": 2.0,
@@ -75,11 +80,9 @@ def calculate_memory_projection(
         "int4": 0.5, "q4": 0.5,
     }
 
-    precision_clean = str(precision).strip().lower() if precision else "float16"
+    precision_clean = str(precision).strip().lower()
     bytes_per_param = bytes_per_param_map.get(precision_clean, 2.0)
-    
-    count = param_count if param_count is not None else 0.0
-    actual_params = count * 1e9 if 0 < count < 1000 else count
+    actual_params = param_count * 1e9 if param_count < 1000 else param_count
 
     base_memory_bytes = actual_params * bytes_per_param
     total_memory_bytes = base_memory_bytes * overhead_factor
@@ -89,7 +92,7 @@ def calculate_memory_projection(
     total_mb = total_memory_bytes / (1024 ** 2)
 
     return {
-        "param_count": count,
+        "param_count": param_count,
         "precision": precision_clean,
         "bytes_per_param": bytes_per_param,
         "base_weight_gb": round(base_gb, 2),
@@ -128,10 +131,7 @@ class ModelLoader:
         target_path = path or self.model_path
         self.shards = []
 
-        if not target_path or not check_directory_exists(target_path):
-            self.is_sharded = False
-            if "verification_report" in self.metadata:
-                self.metadata["verification_report"]["is_sharded"] = False
+        if not check_directory_exists(target_path):
             return []
 
         for root, _, files in os.walk(target_path):
@@ -150,10 +150,8 @@ class ModelLoader:
         target_path = path or self.model_path
         self.corrupted_files = []
 
-        if not target_path or not check_directory_exists(target_path):
-            if "verification_report" in self.metadata:
-                self.metadata["verification_report"]["corruption_detected"] = True
-            return []
+        if not check_directory_exists(target_path):
+            return ["Directory not found"]
 
         for root, _, files in os.walk(target_path):
             for file in files:
@@ -169,93 +167,83 @@ class ModelLoader:
 
         return self.corrupted_files
 
-    def load_config_file(self, target_path: str) -> None:
-        """Helper to safely load config.json into metadata if available."""
-        config_path = os.path.join(target_path, "config.json")
-        if os.path.exists(config_path) and not check_file_corrupted(config_path):
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    self.metadata["raw_config"] = json.load(f)
-            except Exception:
-                self.metadata["raw_config"] = {}
-
     def scan_model_directory(self, path: Optional[str] = None) -> bool:
         start_time = time.perf_counter()
-
-        if path is not None:
-            self.model_path = path
-
-        target_path = self.model_path
-
-        if not target_path:
-            self.is_validated = False
-            self.from_cache = False
-            self.performance_metrics["scan_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
-            return False
+        target_path = path or self.model_path
 
         # Check Cache
-        if self.use_cache and target_path in _METADATA_CACHE:
+        if self.use_cache and target_path and target_path in _METADATA_CACHE:
             cached_data = _METADATA_CACHE[target_path]
             self.is_validated = cached_data.get("is_validated", False)
-            self.corrupted_files = list(cached_data.get("corrupted_files", []))
-            self.shards = list(cached_data.get("shards", []))
+            self.corrupted_files = cached_data.get("corrupted_files", [])
+            self.shards = cached_data.get("shards", [])
             self.is_sharded = cached_data.get("is_sharded", False)
-            self.metadata = copy.deepcopy(cached_data.get("metadata", self.metadata))
+            self.metadata = cached_data.get("metadata", self.metadata)
             self.from_cache = True
             self.performance_metrics["scan_time_ms"] = 0.0
             return self.is_validated
 
         self.from_cache = False
-
         if not check_directory_exists(target_path):
             self.is_validated = False
             self.performance_metrics["scan_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
             return False
 
-        # Perform Scan
-        self.load_config_file(target_path)
         corrupted = self.detect_corrupted_files(target_path)
-        self.detect_model_shards(target_path)
+        if corrupted:
+            self.is_validated = False
+            self.performance_metrics["scan_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
+            return False
 
-        self.is_validated = len(corrupted) == 0
+        self.detect_model_shards(target_path)
+        self.is_validated = True
         self.performance_metrics["scan_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
 
-        # Cache Scan Results (Valid or Invalid)
-        if self.use_cache:
+        # Save to Cache
+        if self.use_cache and target_path:
             _METADATA_CACHE[target_path] = {
                 "is_validated": self.is_validated,
-                "corrupted_files": list(self.corrupted_files),
-                "shards": list(self.shards),
+                "corrupted_files": self.corrupted_files,
+                "shards": self.shards,
                 "is_sharded": self.is_sharded,
-                "metadata": copy.deepcopy(self.metadata)
+                "metadata": self.metadata
             }
 
-        return self.is_validated
+        return True
 
     def scan_directory(self, path: Optional[str] = None) -> bool:
         return self.scan_model_directory(path)
 
-    def verify_config_keys(self, required_keys: Optional[List[str]] = None) -> bool:
+    def verify_config_keys(self, required_keys: Optional[list] = None) -> bool:
         start_time = time.perf_counter()
-        raw_cfg = self.metadata.get("raw_config") or {}
+        raw_cfg = self.metadata.get("raw_config", {})
+        
+        # Bug Fix: Ensure raw_cfg is a valid non-empty dict
+        if not isinstance(raw_cfg, dict):
+            raw_cfg = {}
+
         if required_keys is None:
             required_keys = ["hidden_size", "num_hidden_layers", "vocab_size"]
-
+            
         is_valid = bool(raw_cfg) and all(k in raw_cfg for k in required_keys)
         if "verification_report" not in self.metadata:
             self.metadata["verification_report"] = {}
         self.metadata["verification_report"]["config_verified"] = is_valid
-
+        
         self.performance_metrics["verification_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
         return is_valid
 
     def estimate_parameter_count(self) -> float:
-        cfg = self.metadata.get("raw_config") or {}
-        hidden_size = cfg.get("hidden_size", 4096)
-        num_layers = cfg.get("num_hidden_layers", 32)
-        vocab_size = cfg.get("vocab_size", 32000)
-        intermediate_size = cfg.get("intermediate_size", 11008)
+        cfg = self.metadata.get("raw_config", {})
+        if not isinstance(cfg, dict):
+            cfg = {}
 
+        # Bug Fix: Fallbacks with type safeguards
+        hidden_size = int(cfg.get("hidden_size") or 4096)
+        num_layers = int(cfg.get("num_hidden_layers") or 32)
+        vocab_size = int(cfg.get("vocab_size") or 32000)
+        intermediate_size = int(cfg.get("intermediate_size") or 11008)
+        
         attn_params = 4 * (hidden_size ** 2)
         mlp_params = 3 * hidden_size * intermediate_size
         embed_params = vocab_size * hidden_size
@@ -267,12 +255,18 @@ class ModelLoader:
 
     def load_safely(self) -> Dict[str, str]:
         start_time = time.perf_counter()
+        
+        # Bug Fix: Return Intercepted if path is missing or unvalidated
+        if not self.model_path or not self.is_validated:
+            self.performance_metrics["load_time_ms"] = round((time.perf_counter() - start_time) * 1000, 3)
+            return {"status": "Intercepted", "reason": "Path not set or model unvalidated"}
+
         try:
             sandbox = SandboxEnvironment(self.model_path)
-
+            
             if hasattr(sandbox, "initialize_sandbox"):
                 sandbox.initialize_sandbox()
-
+            
             if hasattr(sandbox, "execute_safely"):
                 res = sandbox.execute_safely()
             else:
@@ -281,9 +275,9 @@ class ModelLoader:
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 3)
             self.performance_metrics["load_time_ms"] = elapsed_ms
 
-            if not res or res in ("Intercepted", "failed"):
+            if not res or res == "Intercepted" or res == "failed":
                 return {"status": "Intercepted"}
-
+                
             return {"status": "SUCCESS"}
         except Exception as e:
             elapsed_ms = round((time.perf_counter() - start_time) * 1000, 3)
@@ -299,7 +293,7 @@ class ModelLoader:
         param_count: Optional[float] = None, 
         precision: str = "float16"
     ) -> Dict[str, Any]:
-        count = param_count if param_count is not None else (self.metadata.get("param_count") or self.estimate_parameter_count())
+        count = param_count or self.metadata.get("param_count", 0) or self.estimate_parameter_count()
         return calculate_memory_projection(param_count=count, precision=precision)
 
     def get_performance_metrics(self) -> Dict[str, float]:
