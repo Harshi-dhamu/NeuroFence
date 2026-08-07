@@ -236,7 +236,18 @@ class ActivationTracker:
             threshold,
         )
 
-    
+    def classify_anomaly_severity(
+        self,
+        threshold=1e-5,
+    ):
+        """
+        Classify anomaly severity for tracked layers.
+        """
+
+        return ActivationAnalyzer.classify_anomaly_severity(
+            self.get_activations(),
+            threshold,
+        )
 
     def get_activation_history(self):
         """

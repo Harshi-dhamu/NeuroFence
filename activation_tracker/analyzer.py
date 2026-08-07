@@ -360,3 +360,40 @@ class ActivationAnalyzer:
             }
 
         return results
+    @staticmethod
+    def classify_anomaly_severity(
+        activations,
+        threshold: float = 1e-5,
+    ):
+        """
+        Classify anomaly severity for each tracked layer.
+        """
+
+        activity = ActivationAnalyzer.analyze_neuron_activity(
+            activations,
+            threshold,
+        )
+
+        results = {}
+
+        for layer_name, info in activity.items():
+
+            ratio = info["dormant_ratio"]
+
+            if ratio < 0.20:
+                severity = "Normal"
+            elif ratio < 0.40:
+                severity = "Low"
+            elif ratio < 0.60:
+                severity = "Medium"
+            elif ratio < 0.80:
+                severity = "High"
+            else:
+                severity = "Critical"
+
+            results[layer_name] = {
+                **info,
+                "severity": severity,
+            }
+
+        return results
