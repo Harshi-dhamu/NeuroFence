@@ -314,3 +314,49 @@ class ActivationAnalyzer:
         )
 
         return ranking
+
+
+    @staticmethod
+    def analyze_dead_neurons(
+        activations,
+        threshold: float = 1e-5,
+    ):
+        """
+        Analyze dead neuron severity for each tracked layer.
+        """
+
+        activity = ActivationAnalyzer.analyze_neuron_activity(
+            activations,
+            threshold,
+        )
+
+        results = {}
+
+        for layer_name, info in activity.items():
+
+            dormant_ratio = info["dormant_ratio"]
+
+            if dormant_ratio < 0.25:
+                severity = "Low"
+
+            elif dormant_ratio < 0.50:
+                severity = "Moderate"
+
+            elif dormant_ratio < 0.75:
+                severity = "High"
+
+            else:
+                severity = "Critical"
+
+            results[layer_name] = {
+                "layer_type": info["layer_type"],
+                "total_neurons": info["total_neurons"],
+                "active_neurons": info["active_neurons"],
+                "dormant_neurons": info["dormant_neurons"],
+                "activation_frequency": info["activation_frequency"],
+                "dormant_ratio": dormant_ratio,
+                "threshold": threshold,
+                "severity": severity,
+            }
+
+        return results

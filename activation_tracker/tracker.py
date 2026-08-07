@@ -223,6 +223,21 @@ class ActivationTracker:
 
         return self.analyze_neuron_activity(threshold)
 
+    def analyze_dead_neurons(
+        self,
+        threshold=1e-5,
+    ):
+        """
+        Analyze dead neuron severity.
+        """
+
+        return ActivationAnalyzer.analyze_dead_neurons(
+            self.get_activations(),
+            threshold,
+        )
+
+    
+
     def get_activation_history(self):
         """
         Return all stored activation snapshots.
