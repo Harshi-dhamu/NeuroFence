@@ -2,10 +2,12 @@
 from __future__ import annotations
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QLabel,QScrollArea,QVBoxLayout,QWidget
+from torch import layout
 from desktop_ui.components.export_toolbar import ExportToolbar
 from desktop_ui.models.scan_result import ScanResult
 from desktop_ui.widgets.recommendation_card import RecommendationCard
 from desktop_ui.widgets.report_section import ReportSection
+from desktop_ui.widgets.collapsible_section import CollapsibleSection
 
 class ReportPage(QScrollArea):
     export_json_requested=pyqtSignal(); export_csv_requested=pyqtSignal(); export_pdf_requested=pyqtSignal(); save_requested=pyqtSignal()
@@ -17,8 +19,28 @@ class ReportPage(QScrollArea):
         subtitle=QLabel("Detailed model security analysis and export-ready findings"); subtitle.setObjectName("pageSubtitle")
         layout.addWidget(title); layout.addWidget(subtitle)
         self.toolbar=ExportToolbar(); layout.addWidget(self.toolbar)
-        self.summary=ReportSection("Scan Summary"); self.model=ReportSection("Model Details"); self.detection=ReportSection("Detection Results"); self.activation=ReportSection("Activation Analysis"); self.threat=ReportSection("Threat Assessment"); self.recommendations=RecommendationCard()
-        for widget in (self.summary,self.model,self.detection,self.activation,self.threat,self.recommendations): layout.addWidget(widget)
+
+        self.summary = ReportSection("Scan Summary")
+        self.model = ReportSection("Model Details")
+        self.detection = ReportSection("Detection Results")
+        self.activation = ReportSection("Activation Analysis")
+        self.threat = ReportSection("Threat Assessment")
+        self.recommendations = RecommendationCard()
+        
+        self.summary_section = CollapsibleSection("Scan Summary", self.summary )
+        self.model_section = CollapsibleSection("Model Details", self.model )
+        self.detection_section = CollapsibleSection("Detection Results", self.detection)
+        self.activation_section = CollapsibleSection("Activation Analysis", self.activation )
+        self.threat_section = CollapsibleSection("Threat Assessment", self.threat )
+        self.recommendation_section = CollapsibleSection("Recommendations", self.recommendations )
+        
+        layout.addWidget(self.summary_section)
+        layout.addWidget(self.model_section)
+        layout.addWidget(self.detection_section)
+        layout.addWidget(self.activation_section)
+        layout.addWidget(self.threat_section)
+        layout.addWidget(self.recommendation_section)
+
         layout.addStretch()
         self.toolbar.export_json_requested.connect(self.export_json_requested); self.toolbar.export_csv_requested.connect(self.export_csv_requested); self.toolbar.export_pdf_requested.connect(self.export_pdf_requested); self.toolbar.save_requested.connect(self.save_requested)
         self.clear_report()
