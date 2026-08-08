@@ -4,7 +4,7 @@ from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QComboBox,QHBoxLayout,QLabel,QPushButton,QScrollArea,QSpinBox,QVBoxLayout,QWidget
 from desktop_ui.widgets.settings_group import SettingsGroup
 from desktop_ui.widgets.toggle_switch import ToggleSwitch
-
+from PyQt6.QtWidgets import (QCheckBox)
 class SettingsPage(QScrollArea):
     save_requested=pyqtSignal(dict); reset_requested=pyqtSignal(); clear_logs_requested=pyqtSignal()
     def __init__(self,parent=None):

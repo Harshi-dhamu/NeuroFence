@@ -3,7 +3,7 @@ from desktop_ui.controllers.integration_controller import (
 )
 from desktop_ui.widgets.scan_queue_widget import ScanQueueWidget
 from desktop_ui.widgets.notification_widget import NotificationWidget
-
+from desktop_ui.widgets.dashboard_chart import DashboardChart
 from desktop_ui.components.security_overview_card import (
     SecurityOverviewCard,
 )
@@ -240,13 +240,16 @@ class MainWindow(QMainWindow):
         self.activity_splitter = self._new_splitter()
         self.activity = ActivityWidget()
         self.progress_card = ProgressCard()
+        self.dashboard_chart = DashboardChart()
         self.activity.setMinimumHeight(180)
         self.progress_card.setMinimumHeight(180)
         self.progress_card.setObjectName("card")
         self.activity_splitter.addWidget(self.activity)
         self.activity_splitter.addWidget(self.progress_card)
+        self.activity_splitter.addWidget(self.dashboard_chart)
         self.activity_splitter.setStretchFactor(0, 2)
         self.activity_splitter.setStretchFactor(1, 1)
+        self.activity_splitter.setStretchFactor(2, 2)
         self.activity_splitter.setSizes([660, 340])
         self.dashboard_layout.addWidget(self.activity_splitter)
 
