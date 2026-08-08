@@ -1,7 +1,7 @@
 from desktop_ui.controllers.integration_controller import (
     IntegrationController,
 )
-
+from desktop_ui.widgets.scan_queue_widget import ScanQueueWidget
 from desktop_ui.widgets.notification_widget import NotificationWidget
 
 from desktop_ui.components.security_overview_card import (
@@ -184,10 +184,12 @@ class MainWindow(QMainWindow):
         self.action_splitter = self._new_splitter()
         self.upload_card = UploadCard()
         self.scan_card = ScanCard()
+        self.scan_queue_widget = ScanQueueWidget()
         self.upload_card.setMinimumHeight(210)
         self.scan_card.setMinimumHeight(210)
         self.action_splitter.addWidget(self.upload_card)
         self.action_splitter.addWidget(self.scan_card)
+        self.action_splitter.addWidget(self.scan_queue_widget)
         self.action_splitter.setStretchFactor(0, 3)
         self.action_splitter.setStretchFactor(1, 2)
         self.action_splitter.setSizes([600, 400])
@@ -397,6 +399,11 @@ class MainWindow(QMainWindow):
         model_path = self.upload_card.model_path
         if model_path:
             self.dashboard_controller.model_selected(model_path)
+            self.scan_queue_widget.add_model(model_path)
+            self.logs_widget.append_log(
+                "INFO",
+                f"Queued model: {model_path}"
+         )
             self.notification_widget.add_notification(
                 f"Model loaded: {Path(model_path).name}"
                 )
@@ -414,6 +421,16 @@ class MainWindow(QMainWindow):
         
         self.logs_widget.append_log("INFO","Starting integration pipeline...")
         self.scan_controller.start_scan(model_path)
+
+    def add_model_to_queue(self):
+        model_path = self.upload_card.model_path
+        if not model_path:
+            return
+        self.scan_queue_widget.add_model(model_path)
+        self.logs_widget.append_log(
+            "INFO",
+            f"Added to queue: {model_path}"
+        )
 
     def update_dashboard(self, status: str = "Protected") -> None:
         """Backward-compatible high-level status hook."""
