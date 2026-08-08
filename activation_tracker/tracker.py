@@ -259,7 +259,7 @@ class ActivationTracker:
     def analyze_activation_trends(
         self,
         threshold=1e-5,
-        ):
+    ):
         """
         Analyze activation trends across tracked runs.
         """
@@ -267,4 +267,19 @@ class ActivationTracker:
         return ActivationAnalyzer.analyze_activation_trends(
             self.hook_manager.activation_history,
             threshold,
+        )
+
+    def filter_layers(
+        self,
+        layer_names=None,
+        layer_type=None,
+    ):
+        """
+        Return activations matching the requested layer filters.
+        """
+
+        return ActivationAnalyzer.filter_layers(
+            self.get_activations(),
+            layer_names,
+            layer_type,
         )

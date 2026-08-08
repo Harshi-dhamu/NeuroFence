@@ -462,3 +462,32 @@ class ActivationAnalyzer:
             }
 
         return trends
+
+    @staticmethod
+    def filter_layers(
+        activations,
+        layer_names=None,
+        layer_type=None,
+    ):
+        """
+        Filter tracked activations by layer name or layer type.
+        """
+
+        if layer_names is None and layer_type is None:
+            return activations.copy()
+
+        filtered = {}
+
+        for layer_name, info in activations.items():
+
+            if layer_names is not None:
+                if layer_name not in layer_names:
+                    continue
+
+            if layer_type is not None:
+                if info["layer_type"] != layer_type:
+                    continue
+
+            filtered[layer_name] = info
+
+        return filtered
