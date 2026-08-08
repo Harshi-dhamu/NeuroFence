@@ -2,6 +2,8 @@ from desktop_ui.controllers.integration_controller import (
     IntegrationController,
 )
 
+from desktop_ui.widgets.notification_widget import NotificationWidget
+
 from desktop_ui.components.security_overview_card import (
     SecurityOverviewCard,
 )
@@ -55,6 +57,13 @@ class MainWindow(QMainWindow):
     """Main responsive dashboard and future backend integration boundary."""
 
     COMPACT_WIDTH = 1100
+
+    def _build_notification_section(self):
+        self.notification_widget = NotificationWidget()
+        self.notification_widget.setMinimumHeight(200)
+        self.dashboard_layout.addWidget(
+            self.notification_widget
+            )
 
     def __init__(self) -> None:
         super().__init__()
@@ -128,6 +137,8 @@ class MainWindow(QMainWindow):
         self._build_day6_overview_section()
         self._build_security_overview_section()
         self._build_activity_section()
+
+        self._build_notification_section()
 
         self.logs_widget = LogsWidget()
         self.logs_widget.setMinimumHeight(230)
@@ -373,6 +384,9 @@ class MainWindow(QMainWindow):
         model_path = self.upload_card.model_path
         if model_path:
             self.dashboard_controller.model_selected(model_path)
+            self.notification_widget.add_notification(
+                f"Model loaded: {Path(model_path).name}"
+                )
 
     def run_scan(self) -> None:
         """Delegate the full scan workflow to ScanController."""
@@ -486,6 +500,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Validation Error", "Scan result failed validation.")
             return
         self.latest_scan_result = result
+        self.notification_widget.add_notification(
+            f"Scan completed - Threat Score {result.threat_score}%"
+            )
         self.last_threat_score = result.threat_score
         self.last_scan_result = result.overall_status
         self.dashboard_controller.bind_scan_result(result)
@@ -496,6 +513,9 @@ class MainWindow(QMainWindow):
 
     def _handle_scan_error(self, module: str, message: str) -> None:
         self.logs_widget.append_log("ERROR", f"{module}: {message}")
+        self.notification_widget.add_notification(
+            f"❌ Error in {module}"
+            )
         self.statusBar().showMessage(f"Error: {module}")
         QMessageBox.warning(
             self,
