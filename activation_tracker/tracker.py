@@ -283,3 +283,16 @@ class ActivationTracker:
             layer_names,
             layer_type,
         )
+
+    def get_dashboard_metrics(
+        self,
+        threshold=1e-5,
+    ):
+        """
+        Return activation metrics for dashboard integration.
+        """
+
+        return ActivationAnalyzer.prepare_dashboard_metrics(
+            self.get_activations(),
+            threshold,
+        )

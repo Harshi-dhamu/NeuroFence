@@ -491,3 +491,58 @@ class ActivationAnalyzer:
             filtered[layer_name] = info
 
         return filtered
+
+    @staticmethod
+    def prepare_dashboard_metrics(
+        activations,
+        threshold: float = 1e-5,
+    ):
+        """
+        Prepare summary metrics for dashboard integration.
+        """
+
+        if not activations:
+            return {
+                "total_layers": 0,
+                "total_neurons": 0,
+                "active_neurons": 0,
+                "dormant_neurons": 0,
+                "overall_activity": 0.0,
+                "overall_dormant_ratio": 0.0,
+            }
+
+        total_neurons = 0
+        active_neurons = 0
+        dormant_neurons = 0
+
+        for info in activations.values():
+
+            tensor = info["activation"]
+
+            total = tensor.numel()
+
+            active = int(
+                (torch.abs(tensor) > threshold).sum().item()
+            )
+
+            dormant = total - active
+
+            total_neurons += total
+            active_neurons += active
+            dormant_neurons += dormant
+
+        if total_neurons > 0:
+            overall_activity = active_neurons / total_neurons
+            overall_dormant_ratio = dormant_neurons / total_neurons
+        else:
+            overall_activity = 0.0
+            overall_dormant_ratio = 0.0
+
+        return {
+            "total_layers": len(activations),
+            "total_neurons": total_neurons,
+            "active_neurons": active_neurons,
+            "dormant_neurons": dormant_neurons,
+            "overall_activity": overall_activity,
+            "overall_dormant_ratio": overall_dormant_ratio,
+        }
