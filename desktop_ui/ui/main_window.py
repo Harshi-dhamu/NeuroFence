@@ -141,7 +141,7 @@ class MainWindow(QMainWindow):
         self._build_notification_section()
 
         self.logs_widget = LogsWidget()
-        self.logs_widget.setMinimumHeight(230)
+        self.logs_widget.setMinimumHeight(150)
         self.logs_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.dashboard_layout.addWidget(self.logs_widget, 1)
 
@@ -339,7 +339,11 @@ class MainWindow(QMainWindow):
         if compact == self._compact_mode:
             return
         self._compact_mode = compact
-        self.sidebar.setFixedWidth(175 if compact else 240)
+        self.sidebar.set_compact_mode(compact)
+        if compact:
+            self.sidebar.setFixedWidth(80)
+        else:
+            self.sidebar.setFixedWidth(240)
 
         orientation = Qt.Orientation.Vertical if compact else Qt.Orientation.Horizontal
         for splitter in (
@@ -362,14 +366,23 @@ class MainWindow(QMainWindow):
             self.overview_splitter.setSizes([500, 500])
             self.activity_splitter.setSizes([660, 340])
 
+        mode = "Compact" if compact else "Desktop"
+        self.statusBar().showMessage(
+            f"Responsive Mode: {mode} ({self.width()}x{self.height()})"
+            )    
+
     def _arrange_stat_cards(self, compact: bool) -> None:
         for card in self.stat_cards:
             self.stats_layout.removeWidget(card)
         if compact:
-            for row, card in enumerate(self.stat_cards):
-                self.stats_layout.addWidget(card, row, 0)
-                self.stats_layout.setRowStretch(row, 1)
+            self.stats_layout.addWidget(self.card_models, 0, 0)
+            self.stats_layout.addWidget(self.card_threat, 0, 1)
+
+            self.stats_layout.addWidget(self.card_duration, 1, 0)
+            self.stats_layout.addWidget(self.card_risk, 1, 1)
+
             self.stats_layout.setColumnStretch(0, 1)
+            self.stats_layout.setColumnStretch(1, 1)
         else:
             for column, card in enumerate(self.stat_cards):
                 self.stats_layout.addWidget(card, 0, column)
