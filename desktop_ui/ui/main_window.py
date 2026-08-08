@@ -9,6 +9,7 @@ from desktop_ui.components.security_overview_card import (
 )
 
 from pathlib import Path
+from desktop_ui.pages.comparison_page import ComparisonPage
 
 from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QTimer, Qt
 from PyQt6.QtWidgets import (
@@ -74,6 +75,7 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         self.setup_menu()
         self.data_service = DummyDataService()
+        
         self.scan_controller = ScanController(self.data_service, self)
         self.dashboard_controller = DashboardController(self, self.data_service)
         self.integration_controller = IntegrationController(dashboard_controller=self.dashboard_controller,logs_widget=self.logs_widget,status_callback=self.statusBar().showMessage,)
@@ -138,12 +140,14 @@ class MainWindow(QMainWindow):
         self.history_page = HistoryPage()
         self.report_page = ReportPage()
         self.settings_page = SettingsPage()
+        
         self.page_stack.addWidget(self.reports_page)
         self.page_stack.addWidget(self.history_page)
         self.page_stack.addWidget(self.report_page)
         self.page_stack.addWidget(self.settings_page)
         self._page_indexes = {"dashboard": 0, "models": 0, "scan": 0, "reports": 1, "history": 2, "report": 3, "settings": 4}
         self._page_animation = None
+
     def _build_statistics_section(self) -> None:
         self.stats_container = QWidget()
         self.stats_layout = QGridLayout(self.stats_container)
