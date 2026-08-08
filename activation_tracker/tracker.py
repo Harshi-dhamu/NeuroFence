@@ -255,3 +255,16 @@ class ActivationTracker:
         """
 
         return self.hook_manager.activation_history
+
+    def analyze_activation_trends(
+        self,
+        threshold=1e-5,
+        ):
+        """
+        Analyze activation trends across tracked runs.
+        """
+
+        return ActivationAnalyzer.analyze_activation_trends(
+            self.hook_manager.activation_history,
+            threshold,
+        )

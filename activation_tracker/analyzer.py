@@ -397,3 +397,68 @@ class ActivationAnalyzer:
             }
 
         return results
+
+    @staticmethod
+    def analyze_activation_trends(
+        activation_history,
+        threshold: float = 1e-5,
+    ):
+        """
+        Analyze activation trends across multiple inference runs.
+        """
+
+        if not activation_history:
+            return {}
+
+        layer_names = activation_history[0].keys()
+
+        trends = {}
+
+        for layer_name in layer_names:
+
+            activity_scores = []
+
+            for snapshot in activation_history:
+
+                if layer_name not in snapshot:
+                    continue
+
+                tensor = snapshot[layer_name]["activation"]
+
+                total = tensor.numel()
+
+                if total == 0:
+                    activity_score = 0.0
+                else:
+                    active = int(
+                        (torch.abs(tensor) > threshold).sum().item()
+                    )
+
+                    activity_score = active / total
+
+                activity_scores.append(activity_score)
+
+            if not activity_scores:
+                continue
+
+            first_score = activity_scores[0]
+            last_score = activity_scores[-1]
+
+            change = last_score - first_score
+
+            if change > 0.05:
+                trend = "increasing"
+            elif change < -0.05:
+                trend = "decreasing"
+            else:
+                trend = "stable"
+
+            trends[layer_name] = {
+                "activity_scores": activity_scores,
+                "initial_activity": first_score,
+                "final_activity": last_score,
+                "change": change,
+                "trend": trend,
+            }
+
+        return trends
