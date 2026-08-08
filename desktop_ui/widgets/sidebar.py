@@ -39,6 +39,7 @@ class Sidebar(QFrame):
             ("models", "⬡", "Models"),
             ("scan", "⌁", "Scan"),
             ("reports", "▤", "Reports"),
+            ("comparison", "⇄", "Comparison"),
             ("history", "◷", "History"),
             ("settings", "⚙", "Settings"),
             ("help", "?", "Help"),

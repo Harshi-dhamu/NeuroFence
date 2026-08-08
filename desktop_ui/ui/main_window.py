@@ -1,5 +1,3 @@
-"""Day 9 NeuroFence window: data-driven presentation and navigation layer."""
-
 from desktop_ui.controllers.integration_controller import (
     IntegrationController,
 )
@@ -140,12 +138,15 @@ class MainWindow(QMainWindow):
         self.history_page = HistoryPage()
         self.report_page = ReportPage()
         self.settings_page = SettingsPage()
+        self.comparison_page = ComparisonPage()
         
         self.page_stack.addWidget(self.reports_page)
         self.page_stack.addWidget(self.history_page)
         self.page_stack.addWidget(self.report_page)
         self.page_stack.addWidget(self.settings_page)
-        self._page_indexes = {"dashboard": 0, "models": 0, "scan": 0, "reports": 1, "history": 2, "report": 3, "settings": 4}
+        self.page_stack.addWidget(self.comparison_page)
+        self._page_indexes = {"dashboard": 0, "models": 0, "scan": 0, "reports": 1, "history": 2, "report": 3, "settings": 4, "comparison": 5,
+                              }
         self._page_animation = None
 
     def _build_statistics_section(self) -> None:
