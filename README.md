@@ -22,9 +22,75 @@ NeuroFence is an offline AI security tool designed to detect hidden backdoors an
 - Safetensors
 - Git & GitHub
 
-## 📅 Current Progress
+### Harshi
+- Desktop UI
+- Dashboard
+- Reports
+- History
+- Settings
+- Integration Framework
 
-- ✅ Repository Created
-- ✅ Team Branches Created
-- ✅ Week 1 Started
-- 🚧 Desktop Application Development
+### Tanvi
+- Model Loader
+- Model Validation
+- Metadata Extraction
+
+### Dhruti
+- Detection Engine
+- Threat Scoring
+- Prompt Fuzzing
+
+### Akhina
+- Activation Tracking
+- Neuron Analysis
+
+---
+
+## Features
+
+- Model Loading
+- Security Scanning
+- Threat Score Analysis
+- Scan Reports
+- Scan History
+- Security Dashboard
+- Comparison Page
+- Notification Center
+- Settings Management
+- Integration Testing
+
+---
+
+## Project Structure
+
+desktop_ui/
+controllers/
+models/
+services/
+widgets/
+pages/
+components/
+
+---
+
+## Running the Project
+
+python main.py
+
+---
+
+## Demo Workflow
+
+1. Select Model
+2. Run Security Scan
+3. View Dashboard
+4. Open Reports
+5. Open History
+6. Compare Scans
+7. Export Results
+
+---
+
+## Status
+
+Project completed and integration ready.
