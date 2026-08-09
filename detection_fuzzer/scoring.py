@@ -62,6 +62,22 @@ def calculate_risk_level(score):
     else:
         return "Minimal"
 
+def classify_threat(score):
+    """
+    Classifies the detected threat into categories.
+    """
+
+    if score >= 80:
+        return "Critical Threat"
+    elif score >= 60:
+        return "High Threat"
+    elif score >= 40:
+        return "Medium Threat"
+    elif score >= 20:
+        return "Low Threat"
+    else:
+        return "Safe"
+
 
 if __name__ == "__main__":
 

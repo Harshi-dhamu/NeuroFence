@@ -22,27 +22,47 @@ def generate_report(prompt, threat_score, severity, confidence, risk_level):
             "Threat Score": threat_score,
             "Severity": severity,
             "Confidence": f"{confidence}%",
+            "Confidence Value": confidence,
+            "Confidence Status": (
+                "High" if confidence >= 80
+                else "Medium" if confidence >= 50
+                else "Low"
+            ),
             "Risk Level": risk_level
         },
         "Recommendations": []
     }
 
     if threat_score >= 80:
-        report["Recommendations"].append(
-            "Block this prompt immediately."
-        )
+        report["Recommendations"] = [
+            "Block this prompt immediately.",
+            "Notify the administrator.",
+            "Log the incident for investigation."
+        ]
+
     elif threat_score >= 60:
-        report["Recommendations"].append(
-            "Manual review is recommended."
-        )
+        report["Recommendations"] = [
+            "Manual review is recommended.",
+            "Monitor future requests from this user."
+        ]
+
     elif threat_score >= 40:
-        report["Recommendations"].append(
-            "Monitor this prompt carefully."
-        )
+        report["Recommendations"] = [
+            "Review the prompt before execution.",
+            "Continue monitoring suspicious activity."
+        ]
+
+    elif threat_score >= 20:
+        report["Recommendations"] = [
+            "Prompt has low risk.",
+            "Keep it under observation."
+        ]
+
     else:
-        report["Recommendations"].append(
-            "Prompt appears safe."
-        )
+        report["Recommendations"] = [
+            "Prompt appears safe.",
+            "No immediate action required."
+        ]
 
     return report
 
