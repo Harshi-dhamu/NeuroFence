@@ -86,6 +86,18 @@ class MainWindow(QMainWindow):
         self.scan_controller = ScanController(self.data_service, self)
         self.dashboard_controller = DashboardController(self, self.data_service)
         self.integration_controller = IntegrationController(dashboard_controller=self.dashboard_controller,logs_widget=self.logs_widget,status_callback=self.statusBar().showMessage,)
+        status = self.integration_controller.validate_integrations()
+        for module, loaded in status.items():
+            if loaded:
+                self.logs_widget.append_log(
+                    "SUCCESS",
+                    f"{module} loaded successfully"
+                    )
+            else:
+                self.logs_widget.append_log(
+                    "ERROR",
+                    f"{module} unavailable"
+                    )
         self.connect_signals()
         self.update_dashboard("Protected")
         self.statusBar().showMessage("Ready | NeuroFence scanner protected")
@@ -284,6 +296,7 @@ class MainWindow(QMainWindow):
 
     def connect_signals(self) -> None:
         self.scan_card.scan_button.clicked.connect(self.run_scan)
+        self.scan_card.test_button.clicked.connect(self.run_integration_test)
         self.upload_card.button.clicked.connect(self.load_model)
         self.sidebar.page_requested.connect(self.navigate_to)
         self.history_page.export_requested.connect(self.export_report)
@@ -424,6 +437,28 @@ class MainWindow(QMainWindow):
         
         self.logs_widget.append_log("INFO","Starting integration pipeline...")
         self.scan_controller.start_scan(model_path)
+
+    def run_integration_test(self):
+        self.logs_widget.append_log(
+            "INFO",
+            "Running integration test..."
+            )
+        status = (
+            self.integration_controller
+            .validate_integrations()
+            )
+        for module, ok in status.items():
+            level = "SUCCESS" if ok else "ERROR"
+            self.logs_widget.append_log(
+                level,
+                f"{module}: {'OK' if ok else 'FAILED'}"
+                )
+            
+            QMessageBox.information(
+                self,
+                "Integration Test",
+                "Integration validation completed."
+                )    
 
     def add_model_to_queue(self):
         model_path = self.upload_card.model_path
@@ -670,6 +705,11 @@ class MainWindow(QMainWindow):
             if not hasattr(result, field):
                 self.logs_widget.append_log("ERROR",f"Missing field: {field}")
                 return False
+        if result.threat_score < 0:
+            return False
+
+        if result.threat_score > 100:
+            return False    
         return True
      
     def show_about(self) -> None:

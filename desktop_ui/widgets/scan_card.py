@@ -26,9 +26,14 @@ class ScanCard(QWidget):
         self.scan_button.setObjectName("scanButton")
         self.scan_button.setCursor(Qt.CursorShape.PointingHandCursor)
 
+        self.test_button = QPushButton("Run Integration Test")
+        self.test_button.setObjectName("secondaryButton")
+        self.test_button.setCursor(Qt.CursorShape.PointingHandCursor)
+
         layout.addWidget(eyebrow)
         layout.addWidget(title)
         layout.addWidget(description)
         layout.addStretch()
         layout.addWidget(self.status)
         layout.addWidget(self.scan_button)
+        layout.addWidget(self.test_button)

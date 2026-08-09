@@ -386,3 +386,10 @@ class IntegrationController:
             )
 
             raise
+
+    def validate_integrations(self):
+        return {
+            "model_loader": hasattr(self, "model_service"),
+            "detection_service": hasattr(self, "detection_service"),
+            "activation_service": hasattr(self, "activation_service"),
+            }     
