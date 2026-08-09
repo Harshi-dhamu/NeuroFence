@@ -25,11 +25,15 @@ class ActivationTracker:
         Register forward hooks and start tracking.
         """
 
+        if self._tracking:
+            return
+
         self.hook_manager.clear_activations()
         self.hook_manager.register_hooks(self.model)
 
         self._tracking = True
 
+        self._tracking = True
     def get_activation_count(self):
         """
         Return the number of tracked layers.
@@ -111,6 +115,17 @@ class ActivationTracker:
         return ActivationAnalyzer.prepare_heatmap_data(
             self.get_activations()
         )
+
+    def get_normalized_heatmap_data(self):
+        """
+        Return normalized heatmap-ready activation data.
+        """
+
+        return ActivationAnalyzer.prepare_normalized_heatmap_data(
+            self.get_activations()
+        )
+
+
     
     def get_layer_scores(self, threshold=1e-5):
         """Return activity scores for every tracked layer."""
@@ -119,6 +134,19 @@ class ActivationTracker:
             self.get_activations(),
             threshold,
     )
+
+    def rank_layers(
+        self,
+        threshold=1e-5,
+    ):
+        """
+        Rank tracked layers by activity.
+        """
+
+        return ActivationAnalyzer.rank_layers_by_activity(
+            self.get_activations(),
+            threshold,
+        )
 
     def compare_with(
         self,
@@ -170,8 +198,9 @@ class ActivationTracker:
 
         self.model(input_tensor)
 
-        self.stop_tracking()
+        self.hook_manager.save_activation_snapshot()
 
+        self.stop_tracking()
         return self.get_activations()
     
     def export_all(self, folder="activations"):
@@ -197,3 +226,77 @@ class ActivationTracker:
         """
 
         return self.analyze_neuron_activity(threshold)
+
+    def analyze_dead_neurons(
+        self,
+        threshold=1e-5,
+    ):
+        """
+        Analyze dead neuron severity.
+        """
+
+        return ActivationAnalyzer.analyze_dead_neurons(
+            self.get_activations(),
+            threshold,
+        )
+
+    def classify_anomaly_severity(
+        self,
+        threshold=1e-5,
+    ):
+        """
+        Classify anomaly severity for tracked layers.
+        """
+
+        return ActivationAnalyzer.classify_anomaly_severity(
+            self.get_activations(),
+            threshold,
+        )
+
+    def get_activation_history(self):
+        """
+        Return all stored activation snapshots.
+        """
+
+        return self.hook_manager.activation_history
+
+    def analyze_activation_trends(
+        self,
+        threshold=1e-5,
+    ):
+        """
+        Analyze activation trends across tracked runs.
+        """
+
+        return ActivationAnalyzer.analyze_activation_trends(
+            self.hook_manager.activation_history,
+            threshold,
+        )
+
+    def filter_layers(
+        self,
+        layer_names=None,
+        layer_type=None,
+    ):
+        """
+        Return activations matching the requested layer filters.
+        """
+
+        return ActivationAnalyzer.filter_layers(
+            self.get_activations(),
+            layer_names,
+            layer_type,
+        )
+
+    def get_dashboard_metrics(
+        self,
+        threshold=1e-5,
+    ):
+        """
+        Return activation metrics for dashboard integration.
+        """
+
+        return ActivationAnalyzer.prepare_dashboard_metrics(
+            self.get_activations(),
+            threshold,
+        )

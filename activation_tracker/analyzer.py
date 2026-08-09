@@ -119,6 +119,36 @@ class ActivationAnalyzer:
             )
 
         return heatmaps
+
+    @staticmethod
+    def prepare_normalized_heatmap_data(activations):
+        """
+        Prepare normalized activation matrices for heatmap visualization.
+        Values are scaled between 0 and 1.
+        """
+
+        heatmaps = {}
+
+        for layer_name, info in activations.items():
+
+            tensor = info["activation"].float()
+
+            minimum = tensor.min()
+            maximum = tensor.max()
+
+            if maximum == minimum:
+                normalized = torch.zeros_like(tensor)
+            else:
+                normalized = (
+                    (tensor - minimum)
+                    / (maximum - minimum)
+                )
+
+            heatmaps[layer_name] = normalized.tolist()
+
+        return heatmaps
+
+
     
     @staticmethod
     def compute_layer_scores(
@@ -249,3 +279,270 @@ class ActivationAnalyzer:
             )
 
         return report
+
+    @staticmethod
+    def rank_layers_by_activity(
+        activations,
+        threshold: float = 1e-5,
+    ):
+        """
+        Rank tracked layers based on neuron activity.
+        """
+
+        scores = ActivationAnalyzer.compute_layer_scores(
+            activations,
+            threshold,
+        )
+
+        ranking = []
+
+        for layer_name, info in scores.items():
+
+            ranking.append(
+                {
+                    "layer_name": layer_name,
+                    "layer_type": info["layer_type"],
+                    "activity_score": info["activity_score"],
+                    "active_neurons": info["active_neurons"],
+                    "dormant_neurons": info["dormant_neurons"],
+                }
+            )
+
+        ranking.sort(
+            key=lambda layer: layer["activity_score"],
+            reverse=True,
+        )
+
+        return ranking
+
+
+    @staticmethod
+    def analyze_dead_neurons(
+        activations,
+        threshold: float = 1e-5,
+    ):
+        """
+        Analyze dead neuron severity for each tracked layer.
+        """
+
+        activity = ActivationAnalyzer.analyze_neuron_activity(
+            activations,
+            threshold,
+        )
+
+        results = {}
+
+        for layer_name, info in activity.items():
+
+            dormant_ratio = info["dormant_ratio"]
+
+            if dormant_ratio < 0.25:
+                severity = "Low"
+
+            elif dormant_ratio < 0.50:
+                severity = "Moderate"
+
+            elif dormant_ratio < 0.75:
+                severity = "High"
+
+            else:
+                severity = "Critical"
+
+            results[layer_name] = {
+                "layer_type": info["layer_type"],
+                "total_neurons": info["total_neurons"],
+                "active_neurons": info["active_neurons"],
+                "dormant_neurons": info["dormant_neurons"],
+                "activation_frequency": info["activation_frequency"],
+                "dormant_ratio": dormant_ratio,
+                "threshold": threshold,
+                "severity": severity,
+            }
+
+        return results
+    @staticmethod
+    def classify_anomaly_severity(
+        activations,
+        threshold: float = 1e-5,
+    ):
+        """
+        Classify anomaly severity for each tracked layer.
+        """
+
+        activity = ActivationAnalyzer.analyze_neuron_activity(
+            activations,
+            threshold,
+        )
+
+        results = {}
+
+        for layer_name, info in activity.items():
+
+            ratio = info["dormant_ratio"]
+
+            if ratio < 0.20:
+                severity = "Normal"
+            elif ratio < 0.40:
+                severity = "Low"
+            elif ratio < 0.60:
+                severity = "Medium"
+            elif ratio < 0.80:
+                severity = "High"
+            else:
+                severity = "Critical"
+
+            results[layer_name] = {
+                **info,
+                "severity": severity,
+            }
+
+        return results
+
+    @staticmethod
+    def analyze_activation_trends(
+        activation_history,
+        threshold: float = 1e-5,
+    ):
+        """
+        Analyze activation trends across multiple inference runs.
+        """
+
+        if not activation_history:
+            return {}
+
+        layer_names = activation_history[0].keys()
+
+        trends = {}
+
+        for layer_name in layer_names:
+
+            activity_scores = []
+
+            for snapshot in activation_history:
+
+                if layer_name not in snapshot:
+                    continue
+
+                tensor = snapshot[layer_name]["activation"]
+
+                total = tensor.numel()
+
+                if total == 0:
+                    activity_score = 0.0
+                else:
+                    active = int(
+                        (torch.abs(tensor) > threshold).sum().item()
+                    )
+
+                    activity_score = active / total
+
+                activity_scores.append(activity_score)
+
+            if not activity_scores:
+                continue
+
+            first_score = activity_scores[0]
+            last_score = activity_scores[-1]
+
+            change = last_score - first_score
+
+            if change > 0.05:
+                trend = "increasing"
+            elif change < -0.05:
+                trend = "decreasing"
+            else:
+                trend = "stable"
+
+            trends[layer_name] = {
+                "activity_scores": activity_scores,
+                "initial_activity": first_score,
+                "final_activity": last_score,
+                "change": change,
+                "trend": trend,
+            }
+
+        return trends
+
+    @staticmethod
+    def filter_layers(
+        activations,
+        layer_names=None,
+        layer_type=None,
+    ):
+        """
+        Filter tracked activations by layer name or layer type.
+        """
+
+        if layer_names is None and layer_type is None:
+            return activations.copy()
+
+        filtered = {}
+
+        for layer_name, info in activations.items():
+
+            if layer_names is not None:
+                if layer_name not in layer_names:
+                    continue
+
+            if layer_type is not None:
+                if info["layer_type"] != layer_type:
+                    continue
+
+            filtered[layer_name] = info
+
+        return filtered
+
+    @staticmethod
+    def prepare_dashboard_metrics(
+        activations,
+        threshold: float = 1e-5,
+    ):
+        """
+        Prepare summary metrics for dashboard integration.
+        """
+
+        if not activations:
+            return {
+                "total_layers": 0,
+                "total_neurons": 0,
+                "active_neurons": 0,
+                "dormant_neurons": 0,
+                "overall_activity": 0.0,
+                "overall_dormant_ratio": 0.0,
+            }
+
+        total_neurons = 0
+        active_neurons = 0
+        dormant_neurons = 0
+
+        for info in activations.values():
+
+            tensor = info["activation"]
+
+            total = tensor.numel()
+
+            active = int(
+                (torch.abs(tensor) > threshold).sum().item()
+            )
+
+            dormant = total - active
+
+            total_neurons += total
+            active_neurons += active
+            dormant_neurons += dormant
+
+        if total_neurons > 0:
+            overall_activity = active_neurons / total_neurons
+            overall_dormant_ratio = dormant_neurons / total_neurons
+        else:
+            overall_activity = 0.0
+            overall_dormant_ratio = 0.0
+
+        return {
+            "total_layers": len(activations),
+            "total_neurons": total_neurons,
+            "active_neurons": active_neurons,
+            "dormant_neurons": dormant_neurons,
+            "overall_activity": overall_activity,
+            "overall_dormant_ratio": overall_dormant_ratio,
+        }
